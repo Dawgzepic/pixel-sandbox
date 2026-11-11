@@ -10,6 +10,7 @@ export type ToolName =
   | 'Oil'
   | 'Acid'
   | 'Fire'
+  | 'Smoke'
   | 'Gunpowder'
   | 'Wood'
   | 'Seed'
@@ -64,6 +65,12 @@ function drawElement(ctx: CanvasRenderingContext2D, name: string): void {
     for (const [x, y] of [[4, 9], [6, 8], [8, 9], [10, 8], [5, 11], [7, 10], [9, 11], [11, 10]]) {
       ctx.fillRect(x, y, 2, 2);
     }
+  } else if (name === 'Smoke') {
+    ctx.fillStyle = '#8a8694';
+    ctx.fillRect(5, 7, 3, 3);
+    ctx.fillRect(8, 5, 4, 3);
+    ctx.fillStyle = '#c8c4ce';
+    ctx.fillRect(6, 4, 3, 2);
   } else if (name === 'Fire') {
     ctx.fillRect(7, 3, 2, 3);
     ctx.fillRect(5, 6, 6, 3);
@@ -160,7 +167,7 @@ export interface PaletteItem {
 export const GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
   { label: 'Powders', items: [item('Sand'), item('Gunpowder')] },
   { label: 'Liquids', items: [item('Water'), item('Oil'), item('Acid')] },
-  { label: 'Heat', items: [item('Fire'), item('Lava'), item('Ice'), item('Steam')] },
+  { label: 'Heat', items: [item('Fire'), item('Lava'), item('Smoke'), item('Ice'), item('Steam')] },
   { label: 'Solids', items: [item('Wood'), item('Stone'), item('Metal'), item('Wall')] },
   { label: 'Life', items: [item('Seed'), item('Plant'), item('Bug')] },
   { label: 'Power', items: [item('Battery'), item('Bulb')] },

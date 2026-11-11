@@ -7,18 +7,32 @@ import { stepElectricity } from '../sim/electricity';
 import { decodeWorld, encodeWorld } from '../sim/serialize';
 import { Simulation } from '../sim/simulation';
 import { GRID_H, GRID_W } from '../sim/tuning';
-import { cellFromLocal, layoutView, panForZoom, type View } from '../render/camera';
+import { cellFromLocal, layoutView, panBy, type View } from '../render/camera';
 import { Renderer, worldToCss } from '../render/renderer';
 import { applySlot, deleteSlot, listSlots, loadSlot, saveSlot, SLOT_COUNT, type SlotRecord } from '../storage/saves';
 import { readStars, writeStar } from '../storage/stars';
 import { findItem, GROUPS, iconCanvas, QUICK, type ToolName } from './icons';
 
-const SIZES = [1, 3, 5, 9, 15];
+const BRUSH_CHOICES = [
+  { label: 'Tiny', px: 1 },
+  { label: 'Small', px: 3 },
+  { label: 'Medium', px: 5 },
+  { label: 'Large', px: 9 },
+  { label: 'Huge', px: 15 },
+] as const;
 const SPEEDS = [0.25, 0.5, 1, 2];
 
 interface PointerPoint {
   x: number;
   y: number;
+  pan: boolean;
+}
+
+interface Gesture {
+  dist: number;
+  zoom: number;
+  cellX: number;
+  cellY: number;
 }
 
 export interface SandboxApi {
@@ -76,7 +90,9 @@ export function mountGame(root: HTMLElement): SandboxApi {
     lineAnchor: null as { x: number; y: number } | null,
     portalStroked: false,
     lastCell: null as { x: number; y: number } | null,
-    pinch: null as { dist: number; zoom: number; panX: number; panY: number } | null,
+    hand: false,
+    spaceDown: false,
+    gesture: null as Gesture | null,
     zoom: 2.15,
     panX: 24,
     panY: 10_000,
@@ -101,13 +117,16 @@ export function mountGame(root: HTMLElement): SandboxApi {
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   canvas.addEventListener('wheel', (event) => onWheel(state, event), { passive: false });
   window.addEventListener('keydown', (event) => {
-    if (event.target instanceof HTMLInputElement) return;
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
     if (event.code === 'Space') {
       event.preventDefault();
-      togglePause(state);
+      state.spaceDown = true;
     } else if (event.key === '.') {
       stepOnce(state);
     }
+  });
+  window.addEventListener('keyup', (event) => {
+    if (event.code === 'Space') state.spaceDown = false;
   });
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
@@ -157,8 +176,7 @@ export function mountGame(root: HTMLElement): SandboxApi {
     clientFromCell: (x, y) => clientFromCell(state, x, y),
     select: (name) => selectTool(state, name),
     setBrush: (size, shape) => {
-      const index = SIZES.indexOf(size);
-      if (index >= 0) state.size = SIZES[index];
+      if (BRUSH_CHOICES.some((choice) => choice.px === size)) state.size = size;
       if (shape) state.shape = shape;
       syncBrush(state);
     },
@@ -214,6 +232,8 @@ interface Shell {
   goals: HTMLButtonElement;
   menu: HTMLButtonElement;
   size: HTMLButtonElement;
+  sizeMenu: HTMLElement;
+  hand: HTMLButtonElement;
   shape: HTMLButtonElement;
   all: HTMLButtonElement;
   quick: HTMLElement;
@@ -252,10 +272,24 @@ function buildShell(root: HTMLElement, canvas: HTMLCanvasElement): Shell {
   main.append(header, controls, stage, status, banner);
   const dock = el('div', 'dock');
   const brushRow = el('div', 'brushrow');
-  const size = button('SIZE 3', 'brush-size');
+  const sizeWrap = el('div', 'sizemenu');
+  const size = button('Small 3', 'brush-size');
+  size.setAttribute('aria-haspopup', 'listbox');
+  size.setAttribute('aria-expanded', 'false');
+  const sizeMenu = el('div', 'sizelist');
+  sizeMenu.hidden = true;
+  sizeMenu.setAttribute('role', 'listbox');
+  for (const choice of BRUSH_CHOICES) {
+    const option = button(`${choice.label} ${choice.px}`, `size-${choice.px}`);
+    option.dataset.size = String(choice.px);
+    sizeMenu.append(option);
+  }
+  sizeWrap.append(size, sizeMenu);
+  const hand = button('HAND', 'hand');
+  hand.setAttribute('aria-pressed', 'false');
   const shape = button('CIRCLE', 'brush-shape');
   const all = button('ALL', 'all-elements');
-  brushRow.append(size, shape, all);
+  brushRow.append(sizeWrap, hand, shape, all);
   const quick = el('div', 'quick');
   dock.append(brushRow, quick);
   const sheet = el('div', 'sheet');
@@ -266,7 +300,7 @@ function buildShell(root: HTMLElement, canvas: HTMLCanvasElement): Shell {
   install.hidden = true;
   app.append(main, dock, sheet, toast);
   root.append(app);
-  return { fps, status, play, step, speed, heat, sound, goals, menu, size, shape, all, quick, sheet, banner, install, toast };
+  return { fps, status, play, step, speed, heat, sound, goals, menu, size, sizeMenu, hand, shape, all, quick, sheet, banner, install, toast };
 }
 
 function wireControls(state: GameState): void {
@@ -303,11 +337,35 @@ function wireControls(state: GameState): void {
   ui.goals.addEventListener('click', () => openSheet(state, state.sheet === 'goals' ? '' : 'goals'));
   ui.menu.addEventListener('click', () => openSheet(state, state.sheet === 'menu' ? '' : 'menu'));
   ui.all.addEventListener('click', () => openSheet(state, 'picker'));
-  ui.size.addEventListener('click', () => {
+  ui.size.addEventListener('click', (event) => {
+    event.stopPropagation();
     state.sfx.play('ui');
-    const index = SIZES.indexOf(state.size);
-    state.size = SIZES[(index + 1) % SIZES.length];
+    const open = ui.sizeMenu.hidden;
+    ui.sizeMenu.hidden = !open;
+    ui.size.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  ui.sizeMenu.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) return;
+    const px = Number(target.dataset.size);
+    if (!BRUSH_CHOICES.some((choice) => choice.px === px)) return;
+    state.size = px;
+    ui.sizeMenu.hidden = true;
+    ui.size.setAttribute('aria-expanded', 'false');
     syncBrush(state);
+    state.sfx.play('ui');
+  });
+  document.addEventListener('pointerdown', (event) => {
+    const wrap = ui.size.parentElement;
+    if (wrap && event.target instanceof Node && !wrap.contains(event.target)) {
+      ui.sizeMenu.hidden = true;
+      ui.size.setAttribute('aria-expanded', 'false');
+    }
+  });
+  ui.hand.addEventListener('click', () => {
+    state.hand = !state.hand;
+    ui.hand.setAttribute('aria-pressed', state.hand ? 'true' : 'false');
+    state.sfx.play('ui');
   });
   ui.shape.addEventListener('click', () => {
     state.sfx.play('ui');
@@ -346,6 +404,9 @@ type GameState = {
   tempView: boolean;
   shape: BrushShape;
   size: number;
+  hand: boolean;
+  spaceDown: boolean;
+  gesture: Gesture | null;
   tool: ToolName;
   portalColor: number;
   challenge: ChallengeRuntime | null;
@@ -358,7 +419,6 @@ type GameState = {
   lineAnchor: { x: number; y: number } | null;
   portalStroked: boolean;
   lastCell: { x: number; y: number } | null;
-  pinch: { dist: number; zoom: number; panX: number; panY: number } | null;
   zoom: number;
   panX: number;
   panY: number;
@@ -385,8 +445,12 @@ function selectTool(state: GameState, name: string): void {
 }
 
 function syncBrush(state: GameState): void {
-  state.ui.size.textContent = `SIZE ${state.size}`;
+  const choice = BRUSH_CHOICES.find((item) => item.px === state.size) ?? BRUSH_CHOICES[1];
+  state.ui.size.textContent = `${choice.label} ${choice.px}`;
   state.ui.shape.textContent = state.shape.toUpperCase();
+  for (const option of state.ui.sizeMenu.querySelectorAll('button')) {
+    option.classList.toggle('selected', Number(option.dataset.size) === state.size);
+  }
 }
 
 function syncPause(state: GameState): void {
@@ -441,25 +505,65 @@ function zoomAt(state: GameState, clientX: number, clientY: number, nextZoom: nu
   const rect = state.canvas.getBoundingClientRect();
   const localX = clientX - rect.left;
   const localY = clientY - rect.top;
-  const fx = (localX - state.view.ox) / state.view.dw;
-  const fy = (localY - state.view.oy) / state.view.dh;
-  const rectSize = state.canvas.getBoundingClientRect();
-  const next = layoutView(rectSize.width, rectSize.height, state.sim.w, state.sim.h, nextZoom, 0, 0);
-  const pan = panForZoom(
-    state.view.camX,
-    state.view.camY,
-    state.view.viewW,
-    state.view.viewH,
-    clamp(fx, 0, 1),
-    clamp(fy, 0, 1),
-    next.viewW,
-    next.viewH,
+  const fx = clamp((localX - state.view.ox) / Math.max(1, state.view.dw), 0, 1);
+  const fy = clamp((localY - state.view.oy) / Math.max(1, state.view.dh), 0, 1);
+  const cellX = state.view.camX + fx * state.view.viewW;
+  const cellY = state.view.camY + fy * state.view.viewH;
+  const next = layoutView(rect.width, rect.height, state.sim.w, state.sim.h, nextZoom, 0, 0);
+  state.zoom = nextZoom;
+  state.panX = cellX - fx * next.viewW;
+  state.panY = cellY - fy * next.viewH;
+  applyCamera(state);
+}
+
+function panPixels(state: GameState, dx: number, dy: number): void {
+  const moved = panBy(
+    state.panX,
+    state.panY,
+    dx,
+    dy,
+    state.view.scale,
     state.sim.w,
     state.sim.h,
+    state.view.viewW,
+    state.view.viewH,
   );
+  state.panX = moved.x;
+  state.panY = moved.y;
+  applyCamera(state);
+}
+
+function beginGesture(state: GameState): void {
+  const pts = [...state.pointers.values()];
+  if (pts.length < 2) return;
+  const midX = (pts[0].x + pts[1].x) / 2;
+  const midY = (pts[0].y + pts[1].y) / 2;
+  const rect = state.canvas.getBoundingClientRect();
+  const fx = clamp((midX - rect.left - state.view.ox) / Math.max(1, state.view.dw), 0, 1);
+  const fy = clamp((midY - rect.top - state.view.oy) / Math.max(1, state.view.dh), 0, 1);
+  state.gesture = {
+    dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1,
+    zoom: state.zoom,
+    cellX: state.view.camX + fx * state.view.viewW,
+    cellY: state.view.camY + fy * state.view.viewH,
+  };
+}
+
+function applyGesture(state: GameState): void {
+  const gesture = state.gesture;
+  const pts = [...state.pointers.values()];
+  if (!gesture || pts.length < 2) return;
+  const midX = (pts[0].x + pts[1].x) / 2;
+  const midY = (pts[0].y + pts[1].y) / 2;
+  const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+  const nextZoom = clamp(gesture.zoom * (dist / gesture.dist), 1, 4);
+  const rect = state.canvas.getBoundingClientRect();
+  const next = layoutView(rect.width, rect.height, state.sim.w, state.sim.h, nextZoom, 0, 0);
+  const fx = clamp((midX - rect.left - next.ox) / Math.max(1, next.dw), 0, 1);
+  const fy = clamp((midY - rect.top - next.oy) / Math.max(1, next.dh), 0, 1);
   state.zoom = nextZoom;
-  state.panX = pan.x;
-  state.panY = pan.y;
+  state.panX = gesture.cellX - fx * next.viewW;
+  state.panY = gesture.cellY - fy * next.viewH;
   applyCamera(state);
 }
 
@@ -467,18 +571,14 @@ function onPointerDown(state: GameState, event: PointerEvent): void {
   event.preventDefault();
   state.sfx.resume();
   state.canvas.setPointerCapture(event.pointerId);
-  state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  const pan = state.hand || state.spaceDown || event.button === 1 || event.button === 2;
+  state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, pan });
   if (state.pointers.size >= 2) {
-    const [a, b] = [...state.pointers.values()];
-    state.pinch = {
-      dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
-      zoom: state.zoom,
-      panX: state.panX,
-      panY: state.panY,
-    };
     state.painting = false;
+    beginGesture(state);
     return;
   }
+  if (pan) return;
   state.painting = true;
   state.lastCell = null;
   const cell = cellFromClient(state, event.clientX, event.clientY);
@@ -499,20 +599,16 @@ function onPointerDown(state: GameState, event: PointerEvent): void {
 }
 
 function onPointerMove(state: GameState, event: PointerEvent): void {
-  if (!state.pointers.has(event.pointerId)) return;
+  const previous = state.pointers.get(event.pointerId);
+  if (!previous) return;
   event.preventDefault();
-  state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-  if (state.pointers.size >= 2 && state.pinch) {
-    const [a, b] = [...state.pointers.values()];
-    const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
-    const nextZoom = clamp(state.pinch.zoom * (dist / state.pinch.dist), 1, 4);
-    const midX = (a.x + b.x) / 2;
-    const midY = (a.y + b.y) / 2;
-    state.zoom = state.pinch.zoom;
-    state.panX = state.pinch.panX;
-    state.panY = state.pinch.panY;
-    applyCamera(state);
-    zoomAt(state, midX, midY, nextZoom);
+  state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, pan: previous.pan });
+  if (state.pointers.size >= 2 && state.gesture) {
+    applyGesture(state);
+    return;
+  }
+  if (previous.pan || state.hand || state.spaceDown) {
+    panPixels(state, event.clientX - previous.x, event.clientY - previous.y);
     return;
   }
   if (!state.painting || state.shape === 'line') return;
@@ -528,7 +624,7 @@ function onPointerMove(state: GameState, event: PointerEvent): void {
 function onPointerUp(state: GameState, event: PointerEvent): void {
   const wasLine = state.shape === 'line' && state.lineAnchor && state.painting;
   state.pointers.delete(event.pointerId);
-  if (state.pointers.size < 2) state.pinch = null;
+  if (state.pointers.size < 2) state.gesture = null;
   if (wasLine && state.lineAnchor) {
     const cell = cellFromClient(state, event.clientX, event.clientY) ?? state.lineAnchor;
     for (const [x, y] of bresenham(state.lineAnchor.x, state.lineAnchor.y, cell.x, cell.y)) stamp(state, x, y);

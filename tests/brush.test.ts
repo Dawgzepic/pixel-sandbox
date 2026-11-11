@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { bresenham, brushCells, sprayCells } from '../src/brush';
-import { cellFromLocal, layoutView, panForZoom } from '../src/render/camera';
+import { cellFromLocal, layoutView, panBy, panForZoom } from '../src/render/camera';
 
 describe('brush', () => {
   it('paints a single cell, a circle, and a square', () => {
@@ -28,6 +28,16 @@ describe('camera', () => {
     const view = layoutView(400, 600, 100, 150, 1, 0, 0);
     const cell = cellFromLocal(view.ox + view.dw / 2, view.oy + view.dh / 2, view, 100, 150);
     expect(cell).toEqual({ x: 50, y: 75 });
+  });
+
+  it('clamps a pan inside the world', () => {
+    const moved = panBy(10, 12, 20, -10, 4, 100, 160, 40, 50);
+    expect(moved.x).toBeLessThan(10);
+    expect(moved.y).toBeGreaterThan(12);
+    expect(panBy(0, 0, 80, 40, 4, 100, 160, 40, 50)).toEqual({ x: 0, y: 0 });
+    const far = panBy(50, 80, -1000, -1000, 4, 100, 160, 40, 50);
+    expect(far.x).toBeLessThanOrEqual(60);
+    expect(far.y).toBeLessThanOrEqual(110);
   });
 
   it('keeps the focal cell steady while zooming', () => {

@@ -16,7 +16,7 @@ test('phone screen shows the sandbox, picker, temperature, and challenges', asyn
   await page.evaluate(() => window.__PIXEL_SANDBOX__!.setPaused(true));
   await page.screenshot({ path: '/opt/cursor/artifacts/pixel-sandbox-main.png' });
 
-  await page.getByRole('button', { name: 'ALL' }).click();
+  await page.getByRole('button', { name: 'ALL', exact: true }).click();
   await expect(page.locator('.sheettitle')).toHaveText('ELEMENTS');
   await expect(page.locator('.sheet').getByRole('button', { name: 'Lava' })).toBeVisible();
   await page.screenshot({ path: '/opt/cursor/artifacts/pixel-sandbox-picker.png' });

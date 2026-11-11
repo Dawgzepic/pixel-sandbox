@@ -105,6 +105,10 @@ export class Renderer {
     );
     this.drawBodies(screen, view);
     if (preview) this.drawPreview(screen, view, preview, previewRgb);
+    if (this.sim.flash > 0) {
+      screen.fillStyle = `rgba(255, 236, 190, ${Math.min(0.55, this.sim.flash / 8)})`;
+      screen.fillRect(view.ox, view.oy, view.dw, view.dh);
+    }
   }
 
   private syncChunks(): void {
@@ -172,6 +176,21 @@ export class Renderer {
         g = tg * shade;
         b = tb * shade;
       }
+    } else if (t === El.Fire) {
+      const flick = (sim.frame * 3 + x * 5 + y * 2) & 7;
+      r = 255;
+      g = 70 + flick * 22;
+      b = 16 + (flick & 3) * 14;
+    } else if (t === El.Smoke) {
+      const puff = 90 + (sim.aux[i] % 28) + ((x + y + sim.frame) & 3) * 6;
+      r = puff;
+      g = puff - 4;
+      b = puff + 6;
+    } else if (t === El.Stone) {
+      const heat = Math.max(0, Math.min(1, (sim.temp[i] - 40) / 460));
+      r = 118 + (255 - 118) * heat;
+      g = 118 + (64 - 118) * heat;
+      b = 132 + (28 - 132) * heat;
     } else if (t === El.Empty) {
       r = 16;
       g = 8;
@@ -217,15 +236,23 @@ export class Renderer {
         const i = sim.idx(x, y);
         const t = sim.type[i];
         let glow = GLOW[t];
+        let power = 0.28;
         if ((t === El.Bulb || t === El.Metal) && sim.charge[i] > 0) glow = 2;
         if (t === El.Battery) glow = 2;
+        if (t === El.Stone) {
+          const heat = Math.max(0, Math.min(1, (sim.temp[i] - 50) / 420));
+          if (heat > 0.08) {
+            glow = 1;
+            power = heat * 0.55;
+          }
+        }
+        if (t === El.Bulb && sim.charge[i] > 0) power = 0.55;
         if (!glow) continue;
         const hot = glow === 1;
         const magic = glow === 3;
         const cr = hot ? 255 : magic ? 210 : 120;
         const cg = hot ? 120 : magic ? 80 : 190;
         const cb = hot ? 30 : magic ? 255 : 255;
-        const power = t === El.Bulb && sim.charge[i] > 0 ? 0.55 : 0.28;
         for (let oy = -1; oy <= 1; oy++) {
           for (let ox = -1; ox <= 1; ox++) {
             const nx = x + ox;

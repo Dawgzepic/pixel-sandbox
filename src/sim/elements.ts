@@ -32,11 +32,12 @@ export const El = {
   Clone: 19,
   Portal: 20,
   Wall: 21,
+  Smoke: 22,
 } as const;
 
 export type ElId = (typeof El)[keyof typeof El];
 
-export const ELEMENT_COUNT = 22;
+export const ELEMENT_COUNT = 23;
 
 export type ElementState = 'empty' | 'powder' | 'liquid' | 'gas' | 'solid' | 'fire' | 'life';
 
@@ -89,12 +90,12 @@ export const DEFS: ElementDef[] = [
     blurb: 'Flows. Puts out fire. Freezes, boils. Meets lava: stone and steam.',
     color: [64, 126, 214], variance: 14, state: 'liquid', density: 1,
     movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.4, defaultTemp: 18, alwaysActive: false,
+    acidResist: 0, heatConduct: 0.4, defaultTemp: 18, alwaysActive: true,
     glow: 0, voidImmune: false, conductive: false,
   },
   {
     id: El.Oil, name: 'Oil', category: 'liquid',
-    blurb: 'Floats on water and catches fire easily.',
+    blurb: 'Floats on water. A small spill burns. A pool goes up in a whoosh.',
     color: [120, 78, 36], variance: 16, state: 'liquid', density: 0.55,
     movable: true, solid: false, displaceable: true, flammable: true,
     acidResist: 3, heatConduct: 0.16, defaultTemp: 22, alwaysActive: false,
@@ -110,7 +111,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Fire, name: 'Fire', category: 'fire',
-    blurb: 'Hot and short-lived. Spreads through wood, oil, and plants.',
+    blurb: 'Bursts, flickers, and drifts. Leaves smoke that billows and fades.',
     color: [255, 132, 32], variance: 28, state: 'fire', density: 0.2,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.2, defaultTemp: 480, alwaysActive: true,
@@ -118,7 +119,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Gunpowder, name: 'Gunpowder', category: 'powder',
-    blurb: 'A flame, lava, or electric spark sets off a blast.',
+    blurb: 'Fire, lava, or a spark blows it up and flings whatever is nearby.',
     color: [72, 66, 78], variance: 12, state: 'powder', density: 1.4,
     movable: true, solid: false, displaceable: true, flammable: true,
     acidResist: 4, heatConduct: 0.14, defaultTemp: 20, alwaysActive: false,
@@ -134,7 +135,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Seed, name: 'Seed', category: 'life',
-    blurb: 'Falls, then grows into a plant once it rests beside water.',
+    blurb: 'Rests by water, drinks, and grows a short vine. No water, no growth.',
     color: [196, 176, 96], variance: 14, state: 'powder', density: 1.35,
     movable: true, solid: false, displaceable: true, flammable: true,
     acidResist: 3, heatConduct: 0.12, defaultTemp: 20, alwaysActive: true,
@@ -142,7 +143,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Plant, name: 'Plant', category: 'life',
-    blurb: 'Spreads upward when any of it touches water. Burns. Bugs eat it.',
+    blurb: 'Climbs while it can drink connected water, then stops. Burns. Bugs eat it.',
     color: [46, 170, 64], variance: 20, state: 'life', density: 8,
     movable: false, solid: true, displaceable: false, flammable: true,
     acidResist: 3, heatConduct: 0.14, defaultTemp: 20, alwaysActive: false,
@@ -206,7 +207,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Stone, name: 'Stone', category: 'solid',
-    blurb: 'Tough solid formed when lava cools or meets water. Acid is slow.',
+    blurb: 'Hot stone glows, then cools back to gray. Water cools it faster.',
     color: [118, 118, 132], variance: 12, state: 'solid', density: 9,
     movable: false, solid: true, displaceable: false, flammable: false,
     acidResist: 48, heatConduct: 0.28, defaultTemp: 20, alwaysActive: false,
@@ -243,6 +244,14 @@ export const DEFS: ElementDef[] = [
     movable: false, solid: true, displaceable: false, flammable: false,
     acidResist: 0, heatConduct: 0.04, defaultTemp: 20, alwaysActive: false,
     glow: 0, voidImmune: true, conductive: false,
+  },
+  {
+    id: El.Smoke, name: 'Smoke', category: 'fire',
+    blurb: 'Billows, drifts, and fades. Flames leave it behind.',
+    color: [150, 146, 156], variance: 18, state: 'gas', density: 0.18,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.08, defaultTemp: 60, alwaysActive: true,
+    glow: 0, voidImmune: false, conductive: false,
   },
 ];
 

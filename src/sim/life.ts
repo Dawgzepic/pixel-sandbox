@@ -33,38 +33,69 @@ export function stepLife(sim: Simulation): void {
 function growSeed(sim: Simulation, x: number, y: number): void {
   const below = sim.get(x, y + 1);
   const supported = IS_SOLID[below] === 1 || below === El.Seed || below === El.Plant;
-  const wet = touches(sim, x, y, El.Water);
   const i = sim.idx(x, y);
-  if (supported && wet) {
-    sim.aux[i]++;
-    if (sim.aux[i] >= TUNING.seedTicks) {
-      sim.setCell(x, y, El.Plant, { origin: 'system' });
-    }
-  } else if (!supported) {
-    sim.aux[i] = 0;
+  if (!supported || findDrink(sim, x, y) === null) {
+    if (!supported) sim.aux[i] = 0;
+    return;
   }
+  sim.aux[i]++;
+  if (sim.aux[i] < TUNING.seedTicks) return;
+  const drink = findDrink(sim, x, y);
+  if (drink === null) return;
+  const wx = drink % sim.w;
+  const wy = (drink / sim.w) | 0;
+  sim.setCell(wx, wy, El.Empty, { origin: 'system' });
+  sim.setCell(x, y, El.Plant, { origin: 'system', aux: TUNING.seedBudget - 1 });
 }
 
 function growPlant(sim: Simulation, x: number, y: number): void {
-  if (!sim.plantsWatered) return;
   const i = sim.idx(x, y);
-  sim.aux[i]++;
-  if (sim.aux[i] < TUNING.plantGrowTicks) return;
+  const budget = sim.aux[i];
+  if (budget === 0) return;
+  if ((sim.frame + x * 3 + y) % TUNING.plantGrowTicks !== 0) return;
+  let nx = x;
+  let ny = y - 1;
+  if (sim.isBorder(nx, ny) || sim.get(nx, ny) !== El.Empty) {
+    const dx = ((x + sim.frame) & 1) === 0 ? -1 : 1;
+    nx = x + dx;
+    ny = y;
+    if (sim.isBorder(nx, ny) || sim.get(nx, ny) !== El.Empty) return;
+    const under = sim.get(nx, y + 1);
+    if (IS_SOLID[under] !== 1 && under !== El.Plant) return;
+  }
+  const drink = findDrink(sim, x, y);
+  if (drink === null) return;
+  const wx = drink % sim.w;
+  const wy = (drink / sim.w) | 0;
   sim.aux[i] = 0;
-  const above = y - 1;
-  if (!sim.isBorder(x, above) && sim.get(x, above) === El.Empty) {
-    sim.setCell(x, above, El.Plant, { origin: 'system' });
-    return;
+  sim.setCell(wx, wy, El.Empty, { origin: 'system' });
+  sim.setCell(nx, ny, El.Plant, { origin: 'system', aux: budget - 1 });
+}
+
+/** Water touching this seed or plant, or connected through the vine and the pool. */
+function findDrink(sim: Simulation, x: number, y: number): number | null {
+  const start = sim.idx(x, y);
+  const queue = [start];
+  const seen = new Set<number>([start]);
+  let head = 0;
+  while (head < queue.length && seen.size < 200) {
+    const i = queue[head++];
+    const cx = i % sim.w;
+    const cy = (i / sim.w) | 0;
+    for (let k = 0; k < 4; k++) {
+      const nx = cx + DX[k];
+      const ny = cy + DY[k];
+      if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+      const j = sim.idx(nx, ny);
+      if (seen.has(j)) continue;
+      const t = sim.type[j];
+      if (t === El.Water) return j;
+      if (t !== El.Plant && t !== El.Seed) continue;
+      seen.add(j);
+      queue.push(j);
+    }
   }
-  // Spread is occasional and does not share the burn timer in aux2.
-  if (((sim.frame + x * 5) % 28) !== 0) return;
-  const dx = ((x + sim.frame) & 1) === 0 ? -1 : 1;
-  const nx = x + dx;
-  if (sim.isBorder(nx, y) || sim.get(nx, y) !== El.Empty) return;
-  const under = sim.get(nx, y + 1);
-  if (IS_SOLID[under] === 1 || under === El.Plant) {
-    sim.setCell(nx, y, El.Plant, { origin: 'system' });
-  }
+  return null;
 }
 
 function moveBug(sim: Simulation, x: number, y: number): void {

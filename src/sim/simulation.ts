@@ -57,6 +57,11 @@ export class Simulation {
   aux2: Uint8Array;
   variation: Uint8Array;
   charge: Uint8Array;
+  /** Brief blast velocity, in cells, for powders, liquids, fire, and smoke. */
+  impulseX: Int8Array;
+  impulseY: Int8Array;
+  /** Frames of white-hot flash left after an explosion. */
+  flash = 0;
   /** 1 where a rigid body currently covers the cell. Liquids will not flow back in. */
   bodyBlock: Uint8Array;
   visited: Uint8Array;
@@ -100,6 +105,8 @@ export class Simulation {
     this.aux2 = new Uint8Array(n);
     this.variation = new Uint8Array(n);
     this.charge = new Uint8Array(n);
+    this.impulseX = new Int8Array(n);
+    this.impulseY = new Int8Array(n);
     this.bodyBlock = new Uint8Array(n);
     this.visited = new Uint8Array(n);
     this.reacted = new Uint8Array(n);
@@ -172,6 +179,8 @@ export class Simulation {
     this.aux[i] = aux;
     this.aux2[i] = opts?.aux2 ?? 0;
     if (prev !== el) this.variation[i] = opts?.variation ?? this.rng.int(16);
+    this.impulseX[i] = 0;
+    this.impulseY[i] = 0;
     this.wake(x, y);
   }
 
@@ -232,11 +241,15 @@ export class Simulation {
     this.aux[j] = this.aux[i];
     this.aux2[j] = this.aux2[i];
     this.variation[j] = this.variation[i];
+    this.impulseX[j] = this.impulseX[i];
+    this.impulseY[j] = this.impulseY[i];
     this.type[i] = El.Empty;
     this.temp[i] = AMBIENT;
     this.aux[i] = 0;
     this.aux2[i] = 0;
     this.variation[i] = 0;
+    this.impulseX[i] = 0;
+    this.impulseY[i] = 0;
     this.visited[i] = 1;
     this.visited[j] = 1;
     this.wake(x, y);
@@ -302,6 +315,9 @@ export class Simulation {
     this.aux2.fill(0);
     this.variation.fill(0);
     this.charge.fill(0);
+    this.impulseX.fill(0);
+    this.impulseY.fill(0);
+    this.flash = 0;
     this.bodies.length = 0;
     this.events.length = 0;
     this.recomputeCounts();
@@ -358,6 +374,7 @@ export class Simulation {
     stepLife(this);
     stepMovement(this);
     stepPhysics(this);
+    if (this.flash > 0) this.flash--;
     this.reinforce();
     for (let i = 0; i < this.chunkTtl.length; i++) {
       if (this.chunkTtl[i] > 0) this.chunkTtl[i]--;
@@ -425,6 +442,20 @@ export class Simulation {
     tmp = this.variation[i];
     this.variation[i] = this.variation[j];
     this.variation[j] = tmp;
+    tmp = this.impulseX[i];
+    this.impulseX[i] = this.impulseX[j];
+    this.impulseX[j] = tmp;
+    tmp = this.impulseY[i];
+    this.impulseY[i] = this.impulseY[j];
+    this.impulseY[j] = tmp;
+  }
+
+  addImpulse(x: number, y: number, ix: number, iy: number): void {
+    if (!this.inBounds(x, y)) return;
+    const i = this.idx(x, y);
+    this.impulseX[i] = clampByte(this.impulseX[i] + ix);
+    this.impulseY[i] = clampByte(this.impulseY[i] + iy);
+    this.wake(x, y);
   }
 }
 
@@ -433,6 +464,13 @@ const PRESETS: Record<BodyKind, { hw: number; hh: number; health: number }> = {
   ball: { hw: 2.15, hh: 2.15, health: 70 },
   plank: { hw: 6.5, hh: 0.75, health: 60 },
 };
+
+function clampByte(n: number): number {
+  const v = n | 0;
+  if (v < -4) return -4;
+  if (v > 4) return 4;
+  return v;
+}
 
 function clampTemp(t: number): number {
   const n = Math.round(t);

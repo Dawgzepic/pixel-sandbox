@@ -55,6 +55,30 @@ export function cellFromLocal(
   return { x, y };
 }
 
+/** Move the camera with a finger. Positive dx/dy follow the finger. Clamped to the world. */
+export function panBy(
+  camX: number,
+  camY: number,
+  dxPx: number,
+  dyPx: number,
+  scale: number,
+  gridW: number,
+  gridH: number,
+  viewW: number,
+  viewH: number,
+): { x: number; y: number } {
+  const safe = scale > 0.0001 ? scale : 1;
+  let x = camX - dxPx / safe;
+  let y = camY - dyPx / safe;
+  const maxX = Math.max(0, gridW - viewW);
+  const maxY = Math.max(0, gridH - viewH);
+  if (x < 0) x = 0;
+  if (y < 0) y = 0;
+  if (x > maxX) x = maxX;
+  if (y > maxY) y = maxY;
+  return { x, y };
+}
+
 /** Keep the cell under a pinch focal point (0–1 across the view) stable. */
 export function panForZoom(
   camX: number,

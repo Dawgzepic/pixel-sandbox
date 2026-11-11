@@ -44,11 +44,34 @@ function moveCell(sim: Simulation, x: number, y: number): void {
     moveFire(sim, x, y);
     return;
   }
+  if (t === El.Smoke) {
+    moveSmoke(sim, x, y);
+    return;
+  }
   if (IS_GAS[t]) {
     moveGas(sim, x, y);
     return;
   }
+  if (shove(sim, x, y)) return;
   moveFall(sim, x, y, t);
+}
+
+function shove(sim: Simulation, x: number, y: number): boolean {
+  const i = sim.idx(x, y);
+  let ix = sim.impulseX[i];
+  let iy = sim.impulseY[i];
+  if (ix === 0 && iy === 0) return false;
+  if (ix > 0) sim.impulseX[i] = ix - 1;
+  else if (ix < 0) sim.impulseX[i] = ix + 1;
+  if (iy > 0) sim.impulseY[i] = iy - 1;
+  else if (iy < 0) sim.impulseY[i] = iy + 1;
+  ix = Math.sign(ix);
+  iy = Math.sign(iy);
+  const density = DENSITY[sim.type[i]];
+  if (iy !== 0 && tryEnter(sim, x, y, x, y + iy, density, iy < 0)) return true;
+  if (ix !== 0 && tryEnter(sim, x, y, x + ix, y, density, false)) return true;
+  if (ix !== 0 && iy !== 0 && tryEnter(sim, x, y, x + ix, y + iy, density, iy < 0)) return true;
+  return false;
 }
 
 function moveFall(sim: Simulation, x: number, y: number, t: number): void {
@@ -70,6 +93,15 @@ function moveFall(sim: Simulation, x: number, y: number, t: number): void {
 }
 
 function shouldCling(sim: Simulation, x: number, y: number, t: number): boolean {
+  if (t === El.Water) {
+    for (let k = 0; k < 4; k++) {
+      const nx = x + DX[k];
+      const ny = y + DY[k];
+      if (!sim.inBounds(nx, ny)) continue;
+      const nt = sim.type[sim.idx(nx, ny)];
+      if (nt === El.Plant || nt === El.Seed) return true;
+    }
+  }
   if (t === El.Acid) {
     for (let k = 0; k < 4; k++) {
       const nx = x + DX[k];
@@ -104,31 +136,72 @@ function moveGas(sim: Simulation, x: number, y: number): void {
 
 function moveFire(sim: Simulation, x: number, y: number): void {
   const i = sim.idx(x, y);
-  let cling = false;
-  for (let k = 0; k < 4; k++) {
-    const nx = x + DX[k];
-    const ny = y + DY[k];
-    if (!sim.inBounds(nx, ny)) continue;
-    if (FLAMMABLE[sim.type[sim.idx(nx, ny)]]) {
-      cling = true;
-      break;
+  const poof = sim.aux2[i] > 0;
+  if (!poof && clinging(sim, x, y)) {
+    if (sim.aux[i] < 24) sim.aux[i] = 24;
+    const up = y - 1;
+    if (sim.rng.next() < 0.3 && sim.inBounds(x, up) && !sim.isBorder(x, up) && sim.get(x, up) === El.Empty) {
+      sim.setCell(x, up, El.Fire, { temp: 500, aux: 5 + sim.rng.int(6), origin: 'system' });
     }
-  }
-  if (cling) {
-    if (sim.aux[i] < 40) sim.aux[i] = 40;
     return;
   }
   sim.aux[i]--;
   if (sim.aux[i] <= 0) {
+    if (sim.rng.next() < 0.8) {
+      sim.setCell(x, y, El.Smoke, { temp: 70 + sim.rng.int(40), aux: 10 + sim.rng.int(22), origin: 'system' });
+      sim.addImpulse(x, y, sim.rng.int(3) - 1, -1);
+    } else {
+      sim.setCell(x, y, El.Empty, { origin: 'system' });
+    }
+    return;
+  }
+  if (poof && sim.aux2[i] > 0) sim.aux2[i]--;
+  const ix = Math.sign(sim.impulseX[i]) || (sim.rng.next() < 0.55 ? (sim.rng.next() < 0.5 ? -1 : 1) : 0);
+  const iy = poof ? Math.sign(sim.impulseY[i]) || -1 : -1;
+  decayImpulse(sim, i);
+  if (ix !== 0 && sim.rng.next() < (poof ? 0.85 : 0.6) && tryEmpty(sim, x, y, x + ix, y + iy)) return;
+  if (tryEmpty(sim, x, y, x, y + iy)) return;
+  if (ix !== 0 && tryEmpty(sim, x, y, x + ix, y)) return;
+  sim.aux[i] = Math.max(0, sim.aux[i] - 1);
+}
+
+function moveSmoke(sim: Simulation, x: number, y: number): void {
+  const i = sim.idx(x, y);
+  if (sim.aux[i] <= 1) {
     sim.setCell(x, y, El.Empty, { origin: 'system' });
     return;
   }
-  const up = y - 1;
-  if (sim.inBounds(x, up) && !sim.isBorder(x, up) && sim.get(x, up) === El.Empty) {
-    sim.swap(x, y, x, up);
-  } else {
-    sim.aux[i] = Math.max(0, sim.aux[i] - 1);
+  sim.aux[i]--;
+  const drift = Math.sign(sim.impulseX[i]) || sim.rng.int(3) - 1;
+  const rise = sim.rng.next() < 0.7 ? -1 : 0;
+  decayImpulse(sim, i);
+  if (sim.aux[i] > 12 && sim.rng.next() < 0.18) {
+    const sx = x + (sim.rng.next() < 0.5 ? -1 : 1);
+    const sy = y - 1;
+    if (sim.inBounds(sx, sy) && !sim.isBorder(sx, sy) && sim.get(sx, sy) === El.Empty) {
+      sim.setCell(sx, sy, El.Smoke, { temp: 50, aux: 6 + sim.rng.int(8), origin: 'system' });
+    }
   }
+  if (drift !== 0 && tryEmpty(sim, x, y, x + drift, y + rise)) return;
+  if (rise !== 0 && tryEmpty(sim, x, y, x, y + rise)) return;
+  if (drift !== 0) tryEmpty(sim, x, y, x + drift, y);
+}
+
+function clinging(sim: Simulation, x: number, y: number): boolean {
+  for (let k = 0; k < 4; k++) {
+    const nx = x + DX[k];
+    const ny = y + DY[k];
+    if (!sim.inBounds(nx, ny)) continue;
+    if (FLAMMABLE[sim.type[sim.idx(nx, ny)]]) return true;
+  }
+  return false;
+}
+
+function decayImpulse(sim: Simulation, i: number): void {
+  if (sim.impulseX[i] > 0) sim.impulseX[i]--;
+  else if (sim.impulseX[i] < 0) sim.impulseX[i]++;
+  if (sim.impulseY[i] > 0) sim.impulseY[i]--;
+  else if (sim.impulseY[i] < 0) sim.impulseY[i]++;
 }
 
 function tryEmpty(sim: Simulation, x: number, y: number, nx: number, ny: number): boolean {

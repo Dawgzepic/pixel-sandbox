@@ -42,11 +42,56 @@ export function stepReactions(sim: Simulation): void {
     }
   }
 
-  const limit = Math.min(boom.length, TUNING.maxExplosions);
-  for (let n = 0; n < limit; n++) {
-    const i = boom[n];
-    explode(sim, i % w, (i / w) | 0);
+  const done = new Set<number>();
+  let n = 0;
+  while (n < boom.length && done.size < TUNING.maxExplosions) {
+    const i = boom[n++];
+    if (done.has(i)) continue;
+    done.add(i);
+    explode(sim, i % sim.w, (i / sim.w) | 0, boom, done);
   }
+}
+
+function igniteOil(sim: Simulation, x: number, y: number): void {
+  const pool = flood(sim, x, y, El.Oil, 48);
+  if (pool.length >= TUNING.oilBurst) {
+    const life = 28 + sim.rng.int(18);
+    for (const index of pool) {
+      const cx = index % sim.w;
+      const cy = (index / sim.w) | 0;
+      sim.setCell(cx, cy, El.Fire, { temp: 640, aux: life, aux2: 3, origin: 'system' });
+      const ox = Math.sign(cx - x) || sim.rng.int(3) - 1;
+      const oy = Math.sign(cy - y) || -1;
+      sim.addImpulse(cx, cy, ox * 2, oy * 2 - 1);
+    }
+    sim.flash = Math.max(sim.flash, 5);
+    sim.emit('explode', x, y);
+    return;
+  }
+  sim.setCell(x, y, El.Fire, { temp: 520, aux: TUNING.fireLife, origin: 'system' });
+}
+
+function flood(sim: Simulation, x: number, y: number, el: number, cap: number): number[] {
+  const start = sim.idx(x, y);
+  const out = [start];
+  const seen = new Set<number>([start]);
+  let head = 0;
+  while (head < out.length && out.length < cap) {
+    const i = out[head++];
+    const cx = i % sim.w;
+    const cy = (i / sim.w) | 0;
+    for (let k = 0; k < 4; k++) {
+      const nx = cx + DX[k];
+      const ny = cy + DY[k];
+      if (!sim.inBounds(nx, ny)) continue;
+      const j = sim.idx(nx, ny);
+      if (seen.has(j) || sim.type[j] !== el) continue;
+      seen.add(j);
+      out.push(j);
+      if (out.length >= cap) break;
+    }
+  }
+  return out;
 }
 
 function tryPair(sim: Simulation, x: number, y: number): boolean {
@@ -86,7 +131,9 @@ function tryContact(sim: Simulation, x: number, y: number, boom: number[]): bool
     sim.aux2[i]++;
     if (sim.aux2[i] >= rule.ticks) {
       sim.aux2[i] = 0;
-      if (rule.explode) {
+      if (t === El.Oil && (rule.neighbor === El.Fire || rule.neighbor === El.Lava)) {
+        igniteOil(sim, x, y);
+      } else if (rule.explode) {
         if (boom.length < TUNING.maxExplosions * 2) boom.push(i);
       } else {
         sim.setCell(x, y, rule.become, {
@@ -180,7 +227,8 @@ function doClone(sim: Simulation, x: number, y: number): void {
   }
 }
 
-function explode(sim: Simulation, x: number, y: number): void {
+function explode(sim: Simulation, x: number, y: number, boom: number[], done: Set<number>): void {
+  sim.flash = Math.max(sim.flash, 6);
   sim.emit('explode', x, y);
   const r = TUNING.explodeRadius;
   for (let dy = -r; dy <= r; dy++) {
@@ -192,19 +240,50 @@ function explode(sim: Simulation, x: number, y: number): void {
       if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
       const t = sim.get(nx, ny);
       if (t === El.Wall || t === El.Void) continue;
-      if (t === El.Water && d2 <= 8) {
-        sim.setCell(nx, ny, El.Steam, { temp: 140, origin: 'system' });
+      const kickX = Math.sign(dx) * Math.max(1, 4 - (Math.sqrt(d2) | 0));
+      const kickY = Math.sign(dy || -1) * Math.max(1, 3 - (Math.sqrt(d2) | 0)) - 1;
+      if (t === El.Gunpowder && d2 > 0) {
+        const j = sim.idx(nx, ny);
+        if (!done.has(j) && boom.length < TUNING.maxExplosions * 3) boom.push(j);
+      }
+      if (t === El.Water && d2 <= 10) {
+        sim.setCell(nx, ny, El.Steam, { temp: 150, origin: 'system' });
+        sim.addImpulse(nx, ny, kickX, kickY);
+        sim.visited[sim.idx(nx, ny)] = 1;
         continue;
       }
       if (t === El.Stone || t === El.Metal || t === El.Ice || t === El.Battery || t === El.Bulb || t === El.Portal || t === El.Clone) {
-        sim.setTemp(nx, ny, Math.min(1400, sim.getTemp(nx, ny) + 160));
+        sim.setTemp(nx, ny, Math.min(900, sim.getTemp(nx, ny) + (d2 < 8 ? 220 : 80)));
         continue;
       }
-      if (t === El.Empty && d2 > 5) continue;
+      const weak = t === El.Wood || t === El.Plant || t === El.Seed || t === El.Bug;
+      if (weak && d2 <= 10) {
+        sim.setCell(nx, ny, El.Fire, { temp: 600, aux: 20 + sim.rng.int(20), aux2: 3, origin: 'system' });
+        sim.addImpulse(nx, ny, kickX, kickY);
+        sim.visited[sim.idx(nx, ny)] = 1;
+        continue;
+      }
+      if (t === El.Empty && d2 > 8) {
+        if (d2 <= r * r && sim.rng.next() < 0.45) {
+          sim.setCell(nx, ny, El.Smoke, { temp: 80, aux: 14 + sim.rng.int(20), origin: 'system' });
+          sim.addImpulse(nx, ny, kickX, Math.min(-1, kickY));
+          sim.visited[sim.idx(nx, ny)] = 1;
+        }
+        continue;
+      }
       if (t === El.Acid) continue;
-      const life = Math.max(24, TUNING.fireLife - d2 * 3);
-      if (t === El.Empty || FLAMMABLE[t] || t === El.Fire || t === El.Bug || t === El.Sand || t === El.Gunpowder) {
-        sim.setCell(nx, ny, El.Fire, { temp: 560, aux: life, origin: 'system' });
+      if (t === El.Empty || FLAMMABLE[t] || t === El.Fire || t === El.Sand || t === El.Gunpowder || t === El.Smoke) {
+        const life = Math.max(16, 36 - d2 + sim.rng.int(12));
+        sim.setCell(nx, ny, d2 > 6 ? El.Smoke : El.Fire, {
+          temp: d2 > 6 ? 90 : 620,
+          aux: d2 > 6 ? 12 + sim.rng.int(16) : life,
+          aux2: d2 > 6 ? 0 : 3,
+          origin: 'system',
+        });
+        sim.addImpulse(nx, ny, kickX, kickY);
+        sim.visited[sim.idx(nx, ny)] = 1;
+      } else if (MOVABLE_BLAST(t)) {
+        sim.addImpulse(nx, ny, kickX, kickY);
       }
     }
   }
@@ -212,15 +291,21 @@ function explode(sim: Simulation, x: number, y: number): void {
     const dx = b.x - (x + 0.5);
     const dy = b.y - (y + 0.5);
     const dist = Math.hypot(dx, dy);
-    if (dist >= 8) continue;
-    const force = (1 - dist / 8) * 2.4;
+    const reach = r + 3;
+    if (dist >= reach) continue;
+    const force = (1 - dist / reach) * 4.2;
     const inv = dist < 0.001 ? 0 : 1 / dist;
-    b.vx = clamp(b.vx + dx * inv * force, -0.9, 0.9);
-    b.vy = clamp(b.vy + dy * inv * force, -0.9, 0.9);
-    b.health -= force * 16;
+    b.vx = clamp(b.vx + dx * inv * force, -2.4, 2.4);
+    b.vy = clamp(b.vy + dy * inv * force - force * 0.35, -2.6, 1.4);
+    b.av = clamp(b.av + (dx * inv) * 0.15, -0.4, 0.4);
+    b.health -= force * 22;
     b.asleep = false;
     b.hurt = 'fire';
   }
+}
+
+function MOVABLE_BLAST(t: number): boolean {
+  return t === El.Sand || t === El.Water || t === El.Oil || t === El.Steam || t === El.Smoke || t === El.Fire;
 }
 
 function clamp(n: number, lo: number, hi: number): number {

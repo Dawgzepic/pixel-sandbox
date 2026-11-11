@@ -269,6 +269,28 @@ describe('temperature', () => {
     for (let i = 0; i < 40; i++) pool.step();
     expect(pool.get(11, 15)).toBe(El.Lava);
   });
+
+  it('cools hot stone, faster when water is touching it', () => {
+    const dry = sim();
+    dry.setCell(8, 8, El.Stone);
+    dry.setTemp(8, 8, 420);
+    const wet = sim();
+    wet.setCell(8, 8, El.Stone);
+    wet.setTemp(8, 8, 420);
+    wet.setCell(9, 8, El.Water);
+    wet.setCell(10, 8, El.Stone);
+    wet.setCell(9, 7, El.Stone);
+    wet.setCell(9, 9, El.Stone);
+    for (let i = 0; i < 12; i++) {
+      dry.step();
+      wet.step();
+    }
+    expect(dry.get(8, 8)).toBe(El.Stone);
+    expect(dry.getTemp(8, 8)).toBeLessThan(420);
+    expect(wet.getTemp(8, 8)).toBeLessThan(dry.getTemp(8, 8));
+    for (let i = 0; i < 160; i++) dry.step();
+    expect(dry.getTemp(8, 8)).toBeLessThan(80);
+  });
 });
 
 describe('life and magic', () => {
@@ -276,13 +298,47 @@ describe('life and magic', () => {
     const world = sim(20, 36);
     const y = world.h - 2;
     world.setCell(4, y, El.Stone);
-    world.setCell(7, y, El.Stone);
+    world.setCell(9, y, El.Stone);
     world.setCell(5, y, El.Seed);
     world.setCell(6, y, El.Water);
+    world.setCell(7, y, El.Water);
+    world.setCell(8, y, El.Water);
     for (let i = 0; i < TUNING.seedTicks; i++) world.step();
     expect(world.get(5, y)).toBe(El.Plant);
-    for (let i = 0; i < TUNING.plantGrowTicks; i++) world.step();
+    expect(world.count(El.Water)).toBeLessThan(3);
+    for (let i = 0; i < TUNING.plantGrowTicks * 3; i++) world.step();
     expect(world.get(5, y - 1)).toBe(El.Plant);
+  });
+
+  it('stops plant growth when the water or the seed budget runs out', () => {
+    const thirsty = sim(18, 16);
+    const y = thirsty.h - 2;
+    thirsty.setCell(2, y, El.Stone);
+    thirsty.setCell(9, y, El.Stone);
+    for (let x = 3; x <= 6; x++) thirsty.setCell(x, y, El.Seed);
+    thirsty.setCell(7, y, El.Water);
+    thirsty.setCell(8, y, El.Water);
+    for (let i = 0; i < 300; i++) thirsty.step();
+    const plants = thirsty.count(El.Plant);
+    expect(plants).toBeGreaterThan(0);
+    expect(plants).toBeLessThanOrEqual(2);
+    expect(thirsty.count(El.Water)).toBe(0);
+    const stopped = plants;
+    for (let i = 0; i < 40; i++) thirsty.step();
+    expect(thirsty.count(El.Plant)).toBe(stopped);
+
+    const watered = sim(20, 24);
+    const floor = watered.h - 2;
+    watered.setCell(3, floor, El.Stone);
+    watered.setCell(14, floor, El.Stone);
+    watered.setCell(4, floor, El.Seed);
+    for (let x = 5; x <= 13; x++) watered.setCell(x, floor, El.Water);
+    for (let i = 0; i < 400; i++) watered.step();
+    expect(watered.count(El.Plant)).toBe(TUNING.seedBudget);
+    expect(watered.count(El.Water)).toBeGreaterThan(0);
+    const grown = watered.count(El.Plant);
+    for (let i = 0; i < 50; i++) watered.step();
+    expect(watered.count(El.Plant)).toBe(grown);
   });
 
   it('lets bugs eat plants and die in fire', () => {

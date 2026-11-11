@@ -30,7 +30,7 @@ export class Sfx {
   play(name: Voice): void {
     if (this.muted || !this.ctx || !this.noise) return;
     const nowMs = performance.now();
-    const gap = name === 'explode' || name === 'win' ? 140 : 60;
+    const gap = name === 'explode' || name === 'win' ? 90 : 60;
     if (nowMs - (this.last.get(name) ?? 0) < gap) return;
     this.last.set(name, nowMs);
     const t = this.ctx.currentTime;
@@ -39,8 +39,9 @@ export class Sfx {
     else if (name === 'water') this.tone(240, t, 0.08, 'sine', 0.05, 160);
     else if (name === 'fire') this.burst(t, 0.07, 400, 0.04);
     else if (name === 'explode') {
-      this.burst(t, 0.22, 180, 0.12);
-      this.tone(140, t, 0.2, 'sawtooth', 0.06, 50);
+      this.burst(t, 0.28, 140, 0.16);
+      this.tone(90, t, 0.26, 'sawtooth', 0.08, 42);
+      this.tone(220, t, 0.08, 'square', 0.04, 80);
     } else if (name === 'zap') this.tone(1560, t, 0.05, 'square', 0.04, 420);
     else if (name === 'plant') this.tone(520, t, 0.07, 'triangle', 0.04);
     else if (name === 'break') this.burst(t, 0.1, 240, 0.08);

@@ -66,7 +66,37 @@ export function stepHeat(sim: Simulation): void {
 
   temp.set(tempNext);
   inject(sim);
+  coolStone(sim);
   phase(sim);
+}
+
+/** Hot stone fades toward room temperature. Water next to it pulls the heat out faster. */
+function coolStone(sim: Simulation): void {
+  const { w, h, chunkCols, chunkRows, chunkTtl, type, temp } = sim;
+  for (let cy = 0; cy < chunkRows; cy++) {
+    for (let cx = 0; cx < chunkCols; cx++) {
+      if (chunkTtl[cy * chunkCols + cx] === 0) continue;
+      const x0 = cx * 8;
+      const y0 = cy * 8;
+      const x1 = Math.min(w, x0 + 8);
+      const y1 = Math.min(h, y0 + 8);
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = y * w + x;
+          if (type[i] !== El.Stone || temp[i] <= AMBIENT) continue;
+          let loss = temp[i] > 80 ? 4 : 1;
+          for (let k = 0; k < 4; k++) {
+            const nx = x + DX[k];
+            const ny = y + DY[k];
+            if (!sim.inBounds(nx, ny)) continue;
+            const nt = type[ny * w + nx];
+            if (nt === El.Water || nt === El.Steam) loss += 8;
+          }
+          temp[i] = clampTemp(Math.max(AMBIENT, temp[i] - loss));
+        }
+      }
+    }
+  }
 }
 
 function driftAir(sim: Simulation, x: number, y: number, tp: number): number {

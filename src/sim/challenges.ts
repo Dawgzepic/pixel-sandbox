@@ -24,8 +24,8 @@ const CHALLENGES: ChallengeSpec[] = [
   },
   {
     id: 'grow-plant',
-    name: 'Grow a plant to the top',
-    goal: 'Keep the plant watered until it touches the top.',
+    name: 'Grow a watered vine',
+    goal: 'Reach the line. Each seed drinks the pool, then stops.',
     setup: setupPlant,
   },
   {
@@ -79,13 +79,21 @@ function setupPlant(sim: Simulation): (sim: Simulation) => boolean {
   sim.clearAll();
   const y = sim.h - 2;
   const x = Math.floor(sim.w / 2);
+  const goalY = y - 6;
   sim.setCell(x - 1, y, El.Stone);
-  sim.setCell(x + 2, y, El.Stone);
+  sim.setCell(x + 11, y, El.Stone);
   sim.setCell(x, y, El.Seed);
-  sim.setCell(x + 1, y, El.Water);
+  for (let i = 1; i <= 10; i++) sim.setCell(x + i, y, El.Water);
+  for (let xx = x - 4; xx <= x + 4; xx++) {
+    if (xx !== x) sim.setCell(xx, goalY, El.Stone);
+  }
   sim.resetScores();
-  const need = Math.max(8, Math.floor(sim.h * 0.35));
-  return (s) => plantNearTop(s) && s.generated[El.Plant] >= need;
+  return (s) => {
+    for (let xx = 1; xx < s.w - 1; xx++) {
+      if (s.get(xx, goalY) === El.Plant || s.get(xx, goalY - 1) === El.Plant) return true;
+    }
+    return false;
+  };
 }
 
 function setupStone(sim: Simulation): (sim: Simulation) => boolean {
@@ -139,13 +147,6 @@ function setupAcid(sim: Simulation): (sim: Simulation) => boolean {
   sim.setCell(x0 + 3, y0, El.Empty);
   sim.resetScores();
   return (s) => s.userPaint[El.Acid] > 0 && boxClear(s, x0, y0, x1, y1);
-}
-
-function plantNearTop(sim: Simulation): boolean {
-  for (let x = 1; x < sim.w - 1; x++) {
-    if (sim.get(x, 1) === El.Plant || sim.get(x, 2) === El.Plant) return true;
-  }
-  return false;
 }
 
 function bulbLit(sim: Simulation): boolean {
