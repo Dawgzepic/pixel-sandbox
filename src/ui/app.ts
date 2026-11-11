@@ -1,6 +1,6 @@
 import { brushCells, bresenham, sprayCells, type BrushShape } from '../brush';
 import { Sfx } from '../audio/sfx';
-import { elementByName } from '../sim/elements';
+import { El, elementByName } from '../sim/elements';
 import { buildDemo } from '../sim/demo';
 import { challengeList, startChallenge, type ChallengeRuntime } from '../sim/challenges';
 import { stepElectricity } from '../sim/electricity';
@@ -149,6 +149,7 @@ export function mountGame(root: HTMLElement): SandboxApi {
         state.acc += SPEEDS[state.speedIndex];
         let steps = 0;
         while (state.acc >= 1 && steps < 4) {
+          holdFire(state);
           sim.step();
           playEvents(state);
           state.acc -= 1;
@@ -639,6 +640,20 @@ function onPointerUp(state: GameState, event: PointerEvent): void {
     if (item && state.tool === 'Portal') {
       state.ui.status.textContent = `Portal ${state.portalColor === 1 ? 'A' : 'B'} — ${item.blurb}`;
     }
+  }
+}
+
+/** Keep heating the cells under a held fire brush, once per simulation step. */
+function holdFire(state: GameState): void {
+  if (!state.painting || state.tool !== 'Fire' || !state.lastCell || state.shape === 'line') return;
+  if (state.pointers.size !== 1) return;
+  const shape = state.shape === 'square' ? 'square' : 'circle';
+  const cells = state.shape === 'spray'
+    ? sprayCells(state.lastCell.x, state.lastCell.y, state.size, () => state.sim.rng.next())
+    : brushCells(state.lastCell.x, state.lastCell.y, state.size, shape);
+  for (const [cx, cy] of cells) {
+    if (!state.sim.inBounds(cx, cy) || state.sim.isBorder(cx, cy)) continue;
+    state.sim.paintUser(cx, cy, El.Fire);
   }
 }
 

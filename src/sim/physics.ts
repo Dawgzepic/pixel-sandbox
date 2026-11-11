@@ -451,7 +451,7 @@ function damageAll(sim: Simulation): void {
         if (!nearBody(b, x, y)) continue;
         const t = sim.get(x, y);
         if (t === El.Acid) acid++;
-        else if (t === El.Fire || t === El.Lava) fire++;
+        else if (t === El.Fire || t === El.Lava || t === El.Molten) fire++;
         else if (t === El.Void) voidD++;
       }
     }

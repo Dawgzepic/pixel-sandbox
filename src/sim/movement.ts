@@ -1,4 +1,4 @@
-import { ACID_RESIST, DENSITY, El, FLAMMABLE, IS_GAS, IS_LIQUID, MOVABLE } from './elements';
+import { ACID_RESIST, DENSITY, El, findPair, FLAMMABLE, IS_GAS, IS_LIQUID, MOVABLE } from './elements';
 import { stampBodies } from './physics';
 import type { Simulation } from './simulation';
 
@@ -116,7 +116,7 @@ function shouldCling(sim: Simulation, x: number, y: number, t: number): boolean 
       const ny = y + DY[k];
       if (!sim.inBounds(nx, ny)) continue;
       const nt = sim.type[sim.idx(nx, ny)];
-      if (nt === El.Fire || nt === El.Lava) return true;
+      if (nt === El.Fire || nt === El.Lava || nt === El.Molten) return true;
     }
   }
   return false;
@@ -222,6 +222,7 @@ function tryEnter(
   rising: boolean,
 ): boolean {
   if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) return false;
+  if (quench(sim, x, y, nx, ny)) return true;
   const dest = sim.idx(nx, ny);
   if (sim.bodyBlock[dest] && sim.type[dest] !== El.Portal) return false;
   const dt = sim.type[dest];
@@ -236,6 +237,23 @@ function tryEnter(
     return true;
   }
   return false;
+}
+
+/** Lava or molten metal meeting water hardens in that step, with steam, instead of sinking through. */
+function quench(sim: Simulation, x: number, y: number, nx: number, ny: number): boolean {
+  const a = sim.get(x, y);
+  const b = sim.get(nx, ny);
+  const water = a === El.Water || b === El.Water;
+  const hot = a === El.Lava || b === El.Lava || a === El.Molten || b === El.Molten;
+  if (!water || !hot) return false;
+  const rule = findPair(a, b);
+  if (!rule) return false;
+  const selfIsA = a === rule.a;
+  sim.setCell(x, y, selfIsA ? rule.aTo : rule.bTo, { temp: selfIsA ? rule.aTemp : rule.bTemp, origin: 'system' });
+  sim.setCell(nx, ny, selfIsA ? rule.bTo : rule.aTo, { temp: selfIsA ? rule.bTemp : rule.aTemp, origin: 'system' });
+  sim.visited[sim.idx(x, y)] = 1;
+  sim.visited[sim.idx(nx, ny)] = 1;
+  return true;
 }
 
 function tryTeleport(sim: Simulation, x: number, y: number, nx: number, ny: number): boolean {

@@ -72,6 +72,100 @@ describe('reactions', () => {
     expect(world.count(El.Water)).toBe(0);
   });
 
+  it('ignites a plant with the fire brush instead of replacing it', () => {
+    const world = sim();
+    world.setCell(6, 8, El.Plant);
+    const burned = world.generated[El.Fire];
+    world.paintUser(6, 8, El.Fire);
+    expect(world.get(6, 8)).toBe(El.Fire);
+    expect(world.generated[El.Fire]).toBe(burned + 1);
+
+    world.setCell(8, 8, El.Stone);
+    world.paintUser(8, 8, El.Fire);
+    expect(world.get(8, 8)).toBe(El.Stone);
+    expect(world.getTemp(8, 8)).toBeGreaterThan(20);
+
+    world.setCell(10, 8, El.Plant);
+    world.paintUser(10, 8, El.Lava);
+    expect(world.get(10, 8)).toBe(El.Lava);
+  });
+
+  it('melts stone into lava when the fire brush is held on it', () => {
+    const world = sim();
+    const y = world.h - 2;
+    world.setCell(7, y, El.Wall);
+    world.setCell(9, y, El.Wall);
+    world.setCell(8, y, El.Stone);
+    for (let i = 0; i < 80 && world.get(8, y) === El.Stone; i++) {
+      world.paintUser(8, y, El.Fire);
+      world.step();
+    }
+    expect(world.get(8, y)).toBe(El.Lava);
+    expect(world.getTemp(8, y)).toBeGreaterThan(400);
+  });
+
+  it('melts metal into molten metal when the fire brush is held on it', () => {
+    const world = sim();
+    const y = world.h - 2;
+    world.setCell(7, y, El.Wall);
+    world.setCell(9, y, El.Wall);
+    world.setCell(8, y, El.Metal);
+    let sawGlow = false;
+    for (let i = 0; i < 80 && world.get(8, y) === El.Metal; i++) {
+      world.paintUser(8, y, El.Fire);
+      if (world.getTemp(8, y) > 200) sawGlow = true;
+      world.step();
+    }
+    expect(sawGlow).toBe(true);
+    expect(world.get(8, y)).toBe(El.Molten);
+
+    const cooled = sim();
+    cooled.setCell(8, 8, El.Metal);
+    cooled.setTemp(8, 8, 420);
+    for (let i = 0; i < 80; i++) cooled.step();
+    expect(cooled.get(8, 8)).toBe(El.Metal);
+    expect(cooled.getTemp(8, 8)).toBeLessThan(120);
+  });
+
+  it('hardens molten metal in water and turns flowing lava into stone', () => {
+    const poured = sim();
+    poured.setCell(5, 5, El.Molten);
+    poured.paintUser(5, 5, El.Water);
+    expect(poured.get(5, 5)).toBe(El.Metal);
+    expect(poured.getTemp(5, 5)).toBeGreaterThan(80);
+    let steam = false;
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
+      if (poured.get(5 + dx, 5 + dy) === El.Steam) steam = true;
+    }
+    expect(steam).toBe(true);
+
+    const touch = sim();
+    const y = touch.h - 2;
+    touch.setCell(4, y, El.Molten);
+    touch.setCell(5, y, El.Water);
+    touch.step();
+    expect(touch.get(4, y)).toBe(El.Metal);
+    expect(touch.count(El.Steam)).toBeGreaterThanOrEqual(1);
+    expect(touch.count(El.Molten)).toBe(0);
+
+    const falls = sim();
+    const floor = falls.h - 2;
+    for (let x = 6; x <= 10; x++) falls.setCell(x, floor, El.Water);
+    falls.setCell(8, floor - 5, El.Lava);
+    for (let i = 0; i < 20; i++) falls.step();
+    expect(falls.count(El.Lava)).toBe(0);
+    expect(falls.count(El.Stone)).toBeGreaterThan(0);
+    expect(falls.count(El.Steam)).toBeGreaterThan(0);
+
+    const metalFalls = sim();
+    for (let x = 6; x <= 10; x++) metalFalls.setCell(x, floor, El.Water);
+    metalFalls.setCell(8, floor - 5, El.Molten);
+    for (let i = 0; i < 20; i++) metalFalls.step();
+    expect(metalFalls.count(El.Molten)).toBe(0);
+    expect(metalFalls.count(El.Metal)).toBeGreaterThan(0);
+    expect(metalFalls.count(El.Steam)).toBeGreaterThan(0);
+  });
+
   it('lets the brush resolve water painted onto lava or fire', () => {
     const world = sim();
     world.setCell(5, 5, El.Lava);

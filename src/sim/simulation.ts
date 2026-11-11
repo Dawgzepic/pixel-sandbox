@@ -12,7 +12,7 @@ import { stepHeat } from './heat';
 import { stepLife } from './life';
 import { stepMovement } from './movement';
 import { overlapsSolid, pointInBody, stepPhysics, type Body, type BodyKind } from './physics';
-import { stepReactions } from './reactions';
+import { stepReactions, torch } from './reactions';
 import { AMBIENT, CHUNK, TUNING } from './tuning';
 
 export type { Body, BodyKind };
@@ -190,6 +190,11 @@ export class Simulation {
     if (el < 0 || el >= ELEMENT_COUNT) return;
     const prev = this.type[this.idx(x, y)];
     if (prev === El.Wall && el !== El.Empty) return;
+    if (el === El.Fire && prev !== El.Empty && prev !== El.Fire) {
+      this.userPaint[el]++;
+      this.scorch(x, y);
+      return;
+    }
     if (el !== El.Empty && prev !== El.Empty && prev !== el) {
       const pair = findPair(prev, el);
       if (pair) {
@@ -212,6 +217,16 @@ export class Simulation {
       }
     }
     this.setCell(x, y, el, { origin: 'user', aux: opts?.aux });
+  }
+
+  /** Fire brush heats the cell. Flammables catch; stone and metal melt once they are hot enough. */
+  private scorch(x: number, y: number): void {
+    if (torch(this, x, y)) return;
+    const i = this.idx(x, y);
+    const t = this.type[i];
+    if (t === El.Void) return;
+    this.temp[i] = clampTemp(this.temp[i] + TUNING.fireBrush);
+    this.wake(x, y);
   }
 
   eraseAt(x: number, y: number): void {

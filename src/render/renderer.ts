@@ -19,6 +19,16 @@ function buildLut(): Uint8ClampedArray {
   return lut;
 }
 
+/** Dull red, then orange, then yellow-white as metal approaches melting. */
+function metalHot(heat: number): [number, number, number] {
+  if (heat < 0.45) {
+    const u = heat / 0.45;
+    return [120 + 100 * u, 28 + 80 * u, 32 * (1 - u)];
+  }
+  const u = (heat - 0.45) / 0.55;
+  return [220 + 35 * u, 108 + 140 * u, 20 + 220 * u];
+}
+
 function clamp8(n: number): number {
   return n < 0 ? 0 : n > 255 ? 255 : n | 0;
 }
@@ -191,6 +201,28 @@ export class Renderer {
       r = 118 + (255 - 118) * heat;
       g = 118 + (64 - 118) * heat;
       b = 132 + (28 - 132) * heat;
+    } else if (t === El.Metal) {
+      const heat = Math.max(0, Math.min(1, (sim.temp[i] - 70) / 980));
+      if (heat > 0.04) {
+        const hot = metalHot(heat);
+        r = hot[0];
+        g = hot[1];
+        b = hot[2];
+      } else if (sim.charge[i] > 0) {
+        r = 150;
+        g = 214;
+        b = 255;
+      } else {
+        const o = (t * 16 + sim.variation[i]) * 3;
+        r = LUT[o];
+        g = LUT[o + 1];
+        b = LUT[o + 2];
+      }
+    } else if (t === El.Molten) {
+      const heat = Math.max(0, Math.min(1, (sim.temp[i] - 700) / 500));
+      r = 255;
+      g = 110 + heat * 130;
+      b = 28 + heat * 90;
     } else if (t === El.Empty) {
       r = 16;
       g = 8;
@@ -244,6 +276,13 @@ export class Renderer {
           if (heat > 0.08) {
             glow = 1;
             power = heat * 0.55;
+          }
+        }
+        if (t === El.Metal) {
+          const heat = Math.max(0, Math.min(1, (sim.temp[i] - 70) / 980));
+          if (heat > 0.08) {
+            glow = 1;
+            power = 0.22 + heat * 0.5;
           }
         }
         if (t === El.Bulb && sim.charge[i] > 0) power = 0.55;

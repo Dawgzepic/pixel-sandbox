@@ -52,6 +52,24 @@ export function stepReactions(sim: Simulation): void {
   }
 }
 
+/** Fire brush: flammables catch, gunpowder blows, oil whooshes. The cell is not overwritten. */
+export function torch(sim: Simulation, x: number, y: number): boolean {
+  const t = sim.get(x, y);
+  if (t === El.Oil) {
+    igniteOil(sim, x, y);
+    return true;
+  }
+  if (t === El.Gunpowder) {
+    explode(sim, x, y, [], new Set());
+    return true;
+  }
+  if (FLAMMABLE[t] || t === El.Bug) {
+    sim.setCell(x, y, El.Fire, { temp: 520, aux: TUNING.fireLife, origin: 'system' });
+    return true;
+  }
+  return false;
+}
+
 function igniteOil(sim: Simulation, x: number, y: number): void {
   const pool = flood(sim, x, y, El.Oil, 48);
   if (pool.length >= TUNING.oilBurst) {
@@ -131,7 +149,7 @@ function tryContact(sim: Simulation, x: number, y: number, boom: number[]): bool
     sim.aux2[i]++;
     if (sim.aux2[i] >= rule.ticks) {
       sim.aux2[i] = 0;
-      if (t === El.Oil && (rule.neighbor === El.Fire || rule.neighbor === El.Lava)) {
+      if (t === El.Oil && (rule.neighbor === El.Fire || rule.neighbor === El.Lava || rule.neighbor === El.Molten)) {
         igniteOil(sim, x, y);
       } else if (rule.explode) {
         if (boom.length < TUNING.maxExplosions * 2) boom.push(i);

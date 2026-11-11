@@ -12,6 +12,8 @@ export const TUNING = {
   fireLife: 100,
   heatK: 0.08,
   fireInject: 14,
+  /** Heat added to a cell each time the fire brush is held on it. */
+  fireBrush: 110,
   lavaInject: 5,
   iceChill: 2,
   explodeRadius: 6,

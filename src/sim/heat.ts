@@ -70,7 +70,7 @@ export function stepHeat(sim: Simulation): void {
   phase(sim);
 }
 
-/** Hot stone fades toward room temperature. Water next to it pulls the heat out faster. */
+/** Hot stone and hot metal fade toward room temperature. Water next to them pulls heat out faster. */
 function coolStone(sim: Simulation): void {
   const { w, h, chunkCols, chunkRows, chunkTtl, type, temp } = sim;
   for (let cy = 0; cy < chunkRows; cy++) {
@@ -83,7 +83,7 @@ function coolStone(sim: Simulation): void {
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
           const i = y * w + x;
-          if (type[i] !== El.Stone || temp[i] <= AMBIENT) continue;
+          if ((type[i] !== El.Stone && type[i] !== El.Metal) || temp[i] <= AMBIENT) continue;
           let loss = temp[i] > 80 ? 4 : 1;
           for (let k = 0; k < 4; k++) {
             const nx = x + DX[k];
@@ -134,7 +134,7 @@ function inject(sim: Simulation): void {
             add(sim, x + 1, y, TUNING.fireInject);
             const i = y * w + x;
             if (sim.temp[i] < 460) sim.temp[i] = 460;
-          } else if (t === El.Lava) {
+          } else if (t === El.Lava || t === El.Molten) {
             add(sim, x, y - 1, TUNING.lavaInject);
             add(sim, x, y + 1, TUNING.lavaInject);
             add(sim, x - 1, y, TUNING.lavaInject);

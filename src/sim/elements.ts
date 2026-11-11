@@ -33,11 +33,12 @@ export const El = {
   Portal: 20,
   Wall: 21,
   Smoke: 22,
+  Molten: 23,
 } as const;
 
 export type ElId = (typeof El)[keyof typeof El];
 
-export const ELEMENT_COUNT = 23;
+export const ELEMENT_COUNT = 24;
 
 export type ElementState = 'empty' | 'powder' | 'liquid' | 'gas' | 'solid' | 'fire' | 'life';
 
@@ -111,7 +112,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Fire, name: 'Fire', category: 'fire',
-    blurb: 'Bursts, flickers, and drifts. Leaves smoke that billows and fades.',
+    blurb: 'Ignites and heats whatever is already there. Only empty air becomes flame.',
     color: [255, 132, 32], variance: 28, state: 'fire', density: 0.2,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.2, defaultTemp: 480, alwaysActive: true,
@@ -159,7 +160,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Metal, name: 'Metal', category: 'power',
-    blurb: 'Solid conductor. Draw it as wire between a battery and a bulb.',
+    blurb: 'Solid conductor. Heats from dull red to white and melts if fire is held on it.',
     color: [176, 190, 206], variance: 8, state: 'solid', density: 9,
     movable: false, solid: true, displaceable: false, flammable: false,
     acidResist: 16, heatConduct: 1, defaultTemp: 20, alwaysActive: false,
@@ -207,7 +208,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Stone, name: 'Stone', category: 'solid',
-    blurb: 'Hot stone glows, then cools back to gray. Water cools it faster.',
+    blurb: 'Glows while hot, then cools to gray. Held fire melts it into lava.',
     color: [118, 118, 132], variance: 12, state: 'solid', density: 9,
     movable: false, solid: true, displaceable: false, flammable: false,
     acidResist: 48, heatConduct: 0.28, defaultTemp: 20, alwaysActive: false,
@@ -252,6 +253,14 @@ export const DEFS: ElementDef[] = [
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.08, defaultTemp: 60, alwaysActive: true,
     glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Molten, name: 'Molten', category: 'liquid',
+    blurb: 'Molten metal. Flows and glows. Water hardens it back into hot metal.',
+    color: [255, 168, 48], variance: 18, state: 'liquid', density: 3.4,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 10, heatConduct: 0.45, defaultTemp: 1040, alwaysActive: true,
+    glow: 1, voidImmune: false, conductive: true,
   },
 ];
 
@@ -313,7 +322,14 @@ export const CONTACT_RULES: ContactRule[] = [
   { self: El.Oil, neighbor: El.Lava, become: El.Fire, ticks: 2, setTemp: 540 },
   { self: El.Gunpowder, neighbor: El.Fire, become: El.Fire, ticks: 1, explode: true },
   { self: El.Gunpowder, neighbor: El.Lava, become: El.Fire, ticks: 1, explode: true },
+  { self: El.Gunpowder, neighbor: El.Molten, become: El.Fire, ticks: 1, explode: true },
   { self: El.Gunpowder, neighbor: CHARGE, become: El.Fire, ticks: 1, explode: true },
+  { self: El.Wood, neighbor: El.Molten, become: El.Fire, ticks: 8, setTemp: 560 },
+  { self: El.Plant, neighbor: El.Molten, become: El.Fire, ticks: 6, setTemp: 520 },
+  { self: El.Seed, neighbor: El.Molten, become: El.Fire, ticks: 4, setTemp: 500 },
+  { self: El.Oil, neighbor: El.Molten, become: El.Fire, ticks: 2, setTemp: 560 },
+  { self: El.Bug, neighbor: El.Molten, become: El.Fire, ticks: 2, setTemp: 520 },
+  { self: El.Ice, neighbor: El.Molten, become: El.Water, ticks: 2, setTemp: 40 },
   { self: El.Ice, neighbor: El.Fire, become: El.Water, ticks: 4, setTemp: 10 },
   { self: El.Ice, neighbor: El.Lava, become: El.Water, ticks: 2, setTemp: 30 },
   { self: El.Bug, neighbor: El.Fire, become: El.Empty, ticks: 1 },
@@ -336,6 +352,7 @@ export interface PairRule {
 
 export const PAIR_RULES: PairRule[] = [
   { a: El.Water, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 120, bTemp: 300 },
+  { a: El.Water, b: El.Molten, aTo: El.Steam, bTo: El.Metal, aTemp: 120, bTemp: 480 },
   { a: El.Water, b: El.Fire, aTo: El.Steam, bTo: El.Empty, aTemp: 110, bTemp: 20 },
   { a: El.Ice, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 140, bTemp: 280 },
 ];
@@ -367,6 +384,8 @@ export const PHASE_RULES: PhaseRule[] = [
   { from: El.Steam, to: El.Water, op: '<', temp: 78, setTemp: 85 },
   { from: El.Lava, to: El.Stone, op: '<', temp: 400, setTemp: 280 },
   { from: El.Stone, to: El.Lava, op: '>', temp: 1100, setTemp: 960 },
+  { from: El.Metal, to: El.Molten, op: '>', temp: 1000, setTemp: 1040 },
+  { from: El.Molten, to: El.Metal, op: '<', temp: 520, setTemp: 480 },
 ];
 
 export function elementByName(name: string): ElementDef | undefined {

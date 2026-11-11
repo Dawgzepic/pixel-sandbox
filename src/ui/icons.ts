@@ -17,6 +17,7 @@ export type ToolName =
   | 'Plant'
   | 'Bug'
   | 'Metal'
+  | 'Molten'
   | 'Battery'
   | 'Bulb'
   | 'Ice'
@@ -168,7 +169,7 @@ export const GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
   { label: 'Powders', items: [item('Sand'), item('Gunpowder')] },
   { label: 'Liquids', items: [item('Water'), item('Oil'), item('Acid')] },
   { label: 'Heat', items: [item('Fire'), item('Lava'), item('Smoke'), item('Ice'), item('Steam')] },
-  { label: 'Solids', items: [item('Wood'), item('Stone'), item('Metal'), item('Wall')] },
+  { label: 'Solids', items: [item('Wood'), item('Stone'), item('Metal'), item('Molten'), item('Wall')] },
   { label: 'Life', items: [item('Seed'), item('Plant'), item('Bug')] },
   { label: 'Power', items: [item('Battery'), item('Bulb')] },
   { label: 'Magic', items: [item('Void'), item('Clone'), item('Portal')] },
