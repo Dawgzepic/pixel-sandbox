@@ -1,1 +1,15 @@
-# pixel-sandbox
+# Pixel Sandbox
+
+A retro falling-sand toy for a phone browser. Powders, liquids, fire, plants, electricity, and a handful of wooden objects share one grid.
+
+Play it at <https://dawgzepic.github.io/pixel-sandbox/>. It installs from Chrome and keeps working offline.
+
+```bash
+npm install
+npm test
+npm run dev
+npm run build
+npm run test:e2e
+```
+
+Paint with one finger. Pinch with two fingers to look closer. The bottom row is the quick palette; ALL opens every element.

@@ -1,0 +1,264 @@
+:root {
+  --bg: #140c18;
+  --ink: #ffe6a8;
+  --muted: #d2b4e4;
+  --accent: #ffb000;
+  --panel: #2c1834;
+  --panel-2: #432252;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: "Press Start 2P", ui-monospace, monospace;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app { height: 100%; }
+
+.app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+.maincol {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.top, .controls, .brushrow, .quick, .sheethead, .banner, .slotactions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.top {
+  justify-content: space-between;
+  padding: 8px 10px 0;
+}
+
+.title { color: var(--accent); }
+
+.fps { color: var(--muted); }
+
+.controls, .brushrow {
+  overflow-x: auto;
+  padding: 6px 8px;
+  scrollbar-width: none;
+}
+
+.quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 8px 6px;
+}
+
+.controls::-webkit-scrollbar,
+.quick::-webkit-scrollbar { display: none; }
+
+button, input {
+  font: inherit;
+  color: var(--ink);
+}
+
+button {
+  background: var(--panel);
+  border: 0;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 10px;
+  box-shadow:
+    inset 3px 3px 0 #6d4678,
+    inset -3px -3px 0 #120810;
+  flex: 0 0 auto;
+}
+
+button:active { transform: translateY(1px); }
+
+button[aria-pressed="true"],
+button.selected {
+  background: var(--accent);
+  color: #2a1608;
+  box-shadow:
+    inset 3px 3px 0 #ffe0a0,
+    inset -3px -3px 0 #8a5a10;
+}
+
+button:disabled { opacity: 0.4; }
+
+.stage {
+  flex: 1;
+  min-height: 0;
+  background: #100814;
+  border-top: 4px solid #3a2040;
+  border-bottom: 4px solid #3a2040;
+}
+
+#world {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.status, .bannertext, .note, .goaltext, .when {
+  color: var(--muted);
+}
+
+.status {
+  min-height: 2.8em;
+  padding: 6px 10px 0;
+}
+
+.banner {
+  gap: 8px;
+  padding: 0 8px 6px;
+}
+
+.bannertext { flex: 1; }
+
+.dock {
+  background: #1c1024;
+  padding-bottom: 4px;
+}
+
+.quick { padding-top: 0; }
+
+.tool {
+  width: 52px;
+  min-width: 52px;
+  height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+}
+
+.tool canvas {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+
+.toolname {
+  font-size: 6px;
+  line-height: 1.2;
+}
+
+.sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: rgba(12, 6, 16, 0.96);
+  overflow: auto;
+  padding: 12px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+.sheet[hidden] { display: none; }
+
+.sheethead { justify-content: space-between; margin-bottom: 12px; }
+
+.sheettitle { color: var(--accent); }
+
+.grouplabel {
+  margin: 12px 0 8px;
+  color: var(--accent);
+}
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.goal, .slot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 2px solid #3a2040;
+}
+
+.goalcopy, .slotmeta { flex: 1; min-width: 0; }
+
+.goalname { margin-bottom: 4px; }
+
+input {
+  width: 100%;
+  background: #120810;
+  border: 0;
+  box-shadow: inset 2px 2px 0 #6d4678;
+  padding: 8px;
+  min-height: 44px;
+}
+
+.slot img, .thumb {
+  width: 72px;
+  height: 48px;
+  background: #100814;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+}
+
+.slotactions { flex-wrap: wrap; }
+
+.toast {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 6;
+  background: var(--accent);
+  color: #2a1608;
+  padding: 12px;
+  text-align: center;
+  box-shadow: inset 3px 3px 0 #ffe0a0, inset -3px -3px 0 #8a5a10;
+}
+
+.toast[hidden], .banner[hidden] { display: none; }
+
+@media (orientation: landscape) {
+  .app { flex-direction: row; }
+  .dock {
+    width: min(300px, 42vw);
+    overflow: auto;
+    touch-action: pan-y;
+  }
+  .quick, .grid { flex-wrap: wrap; }
+  .status { min-height: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:active { transform: none; }
+}
