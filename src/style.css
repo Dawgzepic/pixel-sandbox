@@ -64,10 +64,15 @@ html, body {
 
 .fps { color: var(--muted); }
 
-.controls, .brushrow {
+.controls {
   overflow-x: auto;
   padding: 6px 8px;
   scrollbar-width: none;
+}
+
+.brushrow {
+  padding: 6px 8px;
+  overflow: visible;
 }
 
 .quick {
@@ -83,7 +88,7 @@ html, body {
   position: absolute;
   left: 0;
   bottom: 48px;
-  z-index: 5;
+  z-index: 8;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -160,6 +165,8 @@ button:disabled { opacity: 0.4; }
 .bannertext { flex: 1; }
 
 .dock {
+  position: relative;
+  z-index: 3;
   background: #1c1024;
   padding-bottom: 4px;
 }
