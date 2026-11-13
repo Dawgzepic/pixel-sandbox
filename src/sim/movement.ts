@@ -47,11 +47,7 @@ function moveCell(sim: Simulation, x: number, y: number): void {
     moveSmoke(sim, x, y);
     return;
   }
-  if (t === El.Foam) {
-    moveFoam(sim, x, y);
-    return;
-  }
-  if (t === El.Oxygen || t === El.Hydrogen) {
+  if (t === El.Hydrogen) {
     moveFadingGas(sim, x, y);
     return;
   }
@@ -109,19 +105,6 @@ function shouldCling(sim: Simulation, x: number, y: number, t: number): boolean 
     }
   }
   return false;
-}
-
-function moveFoam(sim: Simulation, x: number, y: number): void {
-  const i = sim.idx(x, y);
-  if (sim.aux[i] <= 1) {
-    sim.setCell(x, y, El.Empty, { origin: 'system' });
-    return;
-  }
-  sim.aux[i]--;
-  // Stay piled. A little sideways drift keeps the head soft without shooting it to the ceiling.
-  if (sim.rng.next() > 0.12) return;
-  const dx = sim.rng.next() < 0.5 ? -1 : 1;
-  tryEmpty(sim, x, y, x + dx, y);
 }
 
 function moveFadingGas(sim: Simulation, x: number, y: number): void {
@@ -254,12 +237,12 @@ function tryEnter(
   return false;
 }
 
-/** Lava or molten metal meeting water hardens in that step, with steam, instead of sinking through. */
+/** Lava, molten metal, or molten glass meeting water hardens in that step, with steam. */
 function quench(sim: Simulation, x: number, y: number, nx: number, ny: number): boolean {
   const a = sim.get(x, y);
   const b = sim.get(nx, ny);
   const water = a === El.Water || b === El.Water;
-  const hot = a === El.Lava || b === El.Lava || a === El.Molten || b === El.Molten;
+  const hot = a === El.Lava || b === El.Lava || a === El.Molten || b === El.Molten || a === El.MoltenGlass || b === El.MoltenGlass;
   if (!water || !hot) return false;
   const rule = findPair(a, b);
   if (!rule) return false;

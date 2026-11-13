@@ -43,11 +43,13 @@ export const El = {
   Hydrogen: 29,
   Oxygen: 30,
   Foam: 31,
+  Glass: 32,
+  MoltenGlass: 33,
 } as const;
 
 export type ElId = (typeof El)[keyof typeof El];
 
-export const ELEMENT_COUNT = 32;
+export const ELEMENT_COUNT = 34;
 
 export type ElementState = 'empty' | 'powder' | 'liquid' | 'gas' | 'solid' | 'fire' | 'foam';
 
@@ -209,30 +211,9 @@ export const DEFS: ElementDef[] = [
     acidResist: 0, heatConduct: 0.3, defaultTemp: 20, alwaysActive: true,
     glow: 0, voidImmune: false, conductive: false,
   },
-  {
-    id: El.Peroxide, name: 'Hydrogen peroxide', formula: 'H2O2', category: 'liquid',
-    blurb: 'A pale liquid. On its own it slowly lets a little gas go.',
-    color: [186, 226, 255], variance: 10, state: 'liquid', density: 1.11,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.28, defaultTemp: 20, alwaysActive: true,
-    glow: 0, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Iodide, name: 'Potassium iodide', formula: 'KI', category: 'powder',
-    blurb: 'Pale crystals. They sink in liquids and are not used up.',
-    color: [236, 228, 196], variance: 14, state: 'powder', density: 1.7,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.16, defaultTemp: 20, alwaysActive: false,
-    glow: 0, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Soap, name: 'Soap', category: 'liquid',
-    blurb: 'A light liquid. It floats, and it can hold gas as foam.',
-    color: [255, 176, 214], variance: 12, state: 'liquid', density: 0.82,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.18, defaultTemp: 20, alwaysActive: true,
-    glow: 0, voidImmune: false, conductive: false,
-  },
+  retired(El.Peroxide, 'Hydrogen peroxide'),
+  retired(El.Iodide, 'Potassium iodide'),
+  retired(El.Soap, 'Soap'),
   {
     id: El.Salt, name: 'Sodium chloride', formula: 'NaCl', category: 'powder',
     blurb: 'Salt left behind when an acid and a base meet.',
@@ -249,21 +230,23 @@ export const DEFS: ElementDef[] = [
     acidResist: 0, heatConduct: 0.12, defaultTemp: 30, alwaysActive: true,
     glow: 0, voidImmune: false, conductive: false,
   },
+  retired(El.Oxygen, 'Oxygen'),
+  retired(El.Foam, 'Foam'),
   {
-    id: El.Oxygen, name: 'Oxygen', formula: 'O2', category: 'gas',
-    blurb: 'A gas that rises and drifts. Foam can trap it.',
-    color: [255, 228, 210], variance: 10, state: 'gas', density: 0.07,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.12, defaultTemp: 28, alwaysActive: true,
+    id: El.Glass, name: 'Glass', formula: 'SiO2', category: 'solid',
+    blurb: 'A clear dish. Heat passes through it. Acid leaves it alone. Held fire melts it.',
+    color: [168, 214, 228], variance: 18, state: 'solid', density: 8,
+    movable: false, solid: true, displaceable: false, flammable: false,
+    acidResist: 0, heatConduct: 1, defaultTemp: 20, alwaysActive: false,
     glow: 0, voidImmune: false, conductive: false,
   },
   {
-    id: El.Foam, name: 'Foam', category: 'gas',
-    blurb: 'Bubbles piled up. They hold for a while, then pop.',
-    color: [255, 248, 232], variance: 16, state: 'foam', density: 0.15,
-    movable: true, solid: false, displaceable: false, flammable: false,
-    acidResist: 0, heatConduct: 0.08, defaultTemp: 26, alwaysActive: true,
-    glow: 0, voidImmune: false, conductive: false,
+    id: El.MoltenGlass, name: 'Molten glass', category: 'liquid',
+    blurb: 'Molten glass. Flows and glows. Water hardens it back into hot glass.',
+    color: [255, 214, 120], variance: 16, state: 'liquid', density: 2.2,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.4, defaultTemp: 1040, alwaysActive: true,
+    glow: 1, voidImmune: false, conductive: false,
   },
 ];
 
@@ -316,6 +299,7 @@ export const CONTACT_RULES: ContactRule[] = [
   { self: El.Ice, neighbor: El.Molten, become: El.Water, ticks: 2, setTemp: 40 },
   { self: El.Ice, neighbor: El.Fire, become: El.Water, ticks: 4, setTemp: 10 },
   { self: El.Ice, neighbor: El.Lava, become: El.Water, ticks: 2, setTemp: 30 },
+  { self: El.Ice, neighbor: El.MoltenGlass, become: El.Water, ticks: 2, setTemp: 40 },
 ];
 
 export const RULES_FOR: ContactRule[][] = Array.from({ length: ELEMENT_COUNT }, () => []);
@@ -334,6 +318,7 @@ export interface PairRule {
 export const PAIR_RULES: PairRule[] = [
   { a: El.Water, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 120, bTemp: 300 },
   { a: El.Water, b: El.Molten, aTo: El.Steam, bTo: El.Metal, aTemp: 120, bTemp: 480 },
+  { a: El.Water, b: El.MoltenGlass, aTo: El.Steam, bTo: El.Glass, aTemp: 120, bTemp: 420 },
   { a: El.Water, b: El.Fire, aTo: El.Steam, bTo: El.Empty, aTemp: 110, bTemp: 20 },
   { a: El.Ice, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 140, bTemp: 280 },
   { a: El.Acid, b: El.Base, aTo: El.Salt, bTo: El.Water, aTemp: 68, bTemp: 84 },
@@ -368,6 +353,8 @@ export const PHASE_RULES: PhaseRule[] = [
   { from: El.Stone, to: El.Lava, op: '>', temp: 1100, setTemp: 960 },
   { from: El.Metal, to: El.Molten, op: '>', temp: 1000, setTemp: 1040 },
   { from: El.Molten, to: El.Metal, op: '<', temp: 520, setTemp: 480 },
+  { from: El.Glass, to: El.MoltenGlass, op: '>', temp: 1000, setTemp: 1040 },
+  { from: El.MoltenGlass, to: El.Glass, op: '<', temp: 520, setTemp: 400 },
 ];
 
 export function elementByName(name: string): ElementDef | undefined {

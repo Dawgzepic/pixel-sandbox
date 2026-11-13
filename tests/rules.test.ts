@@ -10,42 +10,43 @@ function sim(w = 24, h = 32, seed = 3): Simulation {
 }
 
 const LIVE = [
-  El.Water, El.Acid, El.Base, El.Peroxide, El.Iodide, El.Soap,
+  El.Water, El.Acid, El.Base, El.Glass, El.MoltenGlass,
   El.Fire, El.Stone, El.Metal, El.Ice, El.Steam, El.Lava, El.Molten, El.Smoke, El.Wall,
 ];
 
 describe('catalog', () => {
   it('keeps stable ids and shows formulas on the chemistry set', () => {
-    expect(DEFS).toHaveLength(32);
+    expect(DEFS).toHaveLength(34);
     for (let i = 0; i < DEFS.length; i++) expect(DEFS[i].id).toBe(i);
     expect(elementLabel(elementByName('Water')!)).toBe('Water (H2O)');
     expect(elementLabel(elementByName('Hydrochloric acid')!)).toBe('Hydrochloric acid (HCl)');
     expect(elementLabel(elementByName('Sodium hydroxide')!)).toBe('Sodium hydroxide (NaOH)');
-    expect(elementLabel(elementByName('Hydrogen peroxide')!)).toBe('Hydrogen peroxide (H2O2)');
-    expect(elementLabel(elementByName('Potassium iodide')!)).toBe('Potassium iodide (KI)');
+    expect(elementLabel(elementByName('Glass')!)).toBe('Glass (SiO2)');
     expect(elementLabel(elementByName('Ice')!)).toBe('Ice (H2O)');
     expect(elementLabel(elementByName('Steam')!)).toBe('Steam (H2O)');
     expect(elementLabel(elementByName('Stone')!)).toBe('Stone');
     expect(elementLabel(elementByName('Metal')!)).toBe('Metal');
     expect(elementLabel(elementByName('Lava')!)).toBe('Lava');
     expect(elementLabel(elementByName('Molten metal')!)).toBe('Molten metal');
-    expect(elementLabel(elementByName('Soap')!)).toBe('Soap');
+    expect(elementLabel(elementByName('Molten glass')!)).toBe('Molten glass');
     const shown = GROUPS.flatMap((group) => group.items.map((item) => item.name));
-    for (const gone of ['Sand', 'Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Wood', 'Battery', 'Bulb']) {
+    for (const gone of ['Sand', 'Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Wood', 'Battery', 'Bulb', 'Hydrogen peroxide', 'Potassium iodide', 'Soap']) {
       expect(shown).not.toContain(gone);
     }
     expect(RETIRED[El.Plant]).toBe(1);
+    expect(RETIRED[El.Peroxide]).toBe(1);
+    expect(RETIRED[El.Foam]).toBe(1);
     expect(RETIRED[El.Water]).toBe(0);
   });
 });
 
 describe('movement', () => {
-  it('drops iodide crystals straight down through sleeping chunks', () => {
+  it('drops salt straight down through sleeping chunks', () => {
     const world = sim(20, 30);
     world.sleepAll();
-    world.setCell(5, 2, El.Iodide);
+    world.setCell(5, 2, El.Salt);
     for (let i = 0; i < 40; i++) world.step();
-    expect(world.get(5, world.h - 2)).toBe(El.Iodide);
+    expect(world.get(5, world.h - 2)).toBe(El.Salt);
     assertHealthy(world);
   });
 
@@ -62,16 +63,23 @@ describe('movement', () => {
     expect(world.count(El.Water)).toBe(1);
   });
 
-  it('floats soap on water', () => {
+  it('keeps water inside a glass dish', () => {
     const world = sim();
     const y = world.h - 2;
-    world.setCell(4, y, El.Stone);
-    world.setCell(6, y, El.Stone);
-    world.setCell(5, y - 1, El.Water);
-    world.setCell(5, y, El.Soap);
-    world.step();
-    expect(world.get(5, y)).toBe(El.Water);
-    expect(world.get(5, y - 1)).toBe(El.Soap);
+    for (let x = 4; x <= 10; x++) world.setCell(x, y, El.Glass);
+    world.setCell(4, y - 1, El.Glass);
+    world.setCell(10, y - 1, El.Glass);
+    world.setCell(4, y - 2, El.Glass);
+    world.setCell(10, y - 2, El.Glass);
+    for (let x = 5; x <= 9; x++) world.setCell(x, y - 1, El.Water);
+    for (let i = 0; i < 30; i++) world.step();
+    for (let x = 5; x <= 9; x++) expect(world.get(x, y)).toBe(El.Glass);
+    expect(world.count(El.Water)).toBe(5);
+    let escaped = false;
+    for (let x = 1; x < world.w - 1; x++) {
+      if (world.get(x, y - 3) === El.Water || world.get(x, y) === El.Water) escaped = true;
+    }
+    expect(escaped).toBe(false);
   });
 });
 
@@ -242,49 +250,72 @@ describe('reactions', () => {
     expect(world.get(8, 4)).toBe(El.Wall);
   });
 
-  it('lets peroxide alone release a little oxygen, and iodide makes that much faster', () => {
-    const alone = sim(24, 32, 5);
-    fillPeroxide(alone);
-    for (let i = 0; i < 40; i++) alone.step();
-    expect(alone.gasSlow).toBeGreaterThan(0);
-    expect(alone.gasFast).toBe(0);
-    expect(alone.count(El.Foam)).toBe(0);
-    expect(alone.count(El.Peroxide)).toBeGreaterThan(8);
-
-    const catalyzed = sim(24, 32, 5);
-    fillPeroxide(catalyzed);
-    catalyzed.setCell(8, catalyzed.h - 4, El.Iodide);
-    for (let i = 0; i < 16; i++) catalyzed.step();
-    expect(catalyzed.gasFast).toBeGreaterThan(alone.gasSlow);
-    expect(catalyzed.count(El.Peroxide)).toBeLessThan(alone.count(El.Peroxide));
-    expect(catalyzed.count(El.Foam)).toBe(0);
+  it('leaves glass intact while acid eats the metal beside it', () => {
+    const world = sim();
+    const y = world.h - 2;
+    world.setCell(4, y, El.Glass);
+    world.setCell(5, y, El.Glass);
+    world.setCell(6, y, El.Acid);
+    world.setCell(7, y, El.Metal);
+    world.setCell(8, y, El.Acid);
+    const steps = DEFS[El.Metal].acidResist + 4;
+    for (let i = 0; i < steps; i++) world.step();
+    expect(world.get(4, y)).toBe(El.Glass);
+    expect(world.get(5, y)).toBe(El.Glass);
+    expect(world.count(El.Glass)).toBe(2);
+    expect(world.count(El.Hydrogen)).toBeGreaterThan(0);
+    expect(world.count(El.Metal)).toBe(0);
   });
 
-  it('turns fast peroxide gas into a tall foam pile when soap is there', () => {
-    const foamy = sim(24, 40, 4);
-    fillPeroxide(foamy);
-    const y = foamy.h - 2;
-    foamy.setCell(8, y - 2, El.Iodide);
-    for (let x = 5; x <= 11; x++) foamy.setCell(x, y - 5, El.Soap);
-    for (let i = 0; i < 24; i++) foamy.step();
-    expect(foamy.gasFast).toBeGreaterThan(6);
-    expect(foamy.count(El.Foam)).toBeGreaterThanOrEqual(24);
+  it('melts glass under a held fire brush and hardens it in water', () => {
+    const world = sim();
+    const y = world.h - 2;
+    world.setCell(7, y, El.Wall);
+    world.setCell(9, y, El.Wall);
+    world.setCell(8, y, El.Glass);
+    let sawGlow = false;
+    for (let i = 0; i < 40 && world.get(8, y) === El.Glass; i++) {
+      world.paintUser(8, y, El.Fire);
+      if (world.getTemp(8, y) > 200) sawGlow = true;
+      world.step();
+    }
+    expect(sawGlow).toBe(true);
+    expect(world.get(8, y)).toBe(El.MoltenGlass);
 
-    const slow = sim(24, 40, 4);
-    fillPeroxide(slow);
-    for (let x = 5; x <= 11; x++) slow.setCell(x, slow.h - 7, El.Soap);
-    for (let i = 0; i < 24; i++) slow.step();
-    expect(slow.count(El.Foam)).toBeLessThan(foamy.count(El.Foam) / 3);
+    const quenched = sim();
+    quenched.setCell(5, 8, El.MoltenGlass);
+    quenched.paintUser(5, 8, El.Water);
+    expect(quenched.get(5, 8)).toBe(El.Glass);
+    let steam = false;
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
+      if (quenched.get(5 + dx, 8 + dy) === El.Steam) steam = true;
+    }
+    expect(steam).toBe(true);
+  });
+
+  it('boils water through a glass dish when fire is outside', () => {
+    const world = sim(20, 24, 2);
+    const y = world.h - 2;
+    for (let x = 6; x <= 12; x++) world.setCell(x, y - 1, El.Glass);
+    world.setCell(6, y, El.Glass);
+    world.setCell(12, y, El.Glass);
+    for (let row = 2; row <= 3; row++) {
+      world.setCell(6, y - row, El.Glass);
+      world.setCell(12, y - row, El.Glass);
+    }
+    for (let x = 7; x <= 11; x++) world.setCell(x, y - 2, El.Water);
+    for (let x = 7; x <= 11; x++) world.setCell(x, y, El.Fire, { aux: 240 });
+    expect(world.count(El.Water)).toBe(5);
+    let boiled = false;
+    for (let i = 0; i < 40 && !boiled; i++) {
+      world.step();
+      if (world.count(El.Steam) > 0) boiled = true;
+    }
+    expect(boiled).toBe(true);
+    expect(world.count(El.Steam)).toBeGreaterThan(0);
+    for (let x = 7; x <= 11; x++) expect(world.get(x, y - 1)).toBe(El.Glass);
   });
 });
-
-function fillPeroxide(world: Simulation): void {
-  const y = world.h - 2;
-  for (let x = 4; x <= 12; x++) world.setCell(x, y, El.Stone);
-  for (let x = 5; x <= 11; x++) {
-    for (let dy = 1; dy <= 4; dy++) world.setCell(x, y - dy, El.Peroxide);
-  }
-}
 
 describe('temperature', () => {
   it('keeps lonely ice frozen', () => {

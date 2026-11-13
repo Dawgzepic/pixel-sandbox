@@ -2,15 +2,12 @@ import { brushCells, bresenham, sprayCells, type BrushShape } from '../brush';
 import { Sfx } from '../audio/sfx';
 import { El, elementByName } from '../sim/elements';
 import { buildDemo } from '../sim/demo';
-import { challengeList, startChallenge, type ChallengeRuntime } from '../sim/challenges';
 import { stepElectricity } from '../sim/electricity';
-import { decodeWorld, encodeWorld } from '../sim/serialize';
 import { Simulation } from '../sim/simulation';
 import { GRID_H, GRID_W } from '../sim/tuning';
 import { cellFromLocal, layoutView, panBy, type View } from '../render/camera';
 import { Renderer, worldToCss } from '../render/renderer';
 import { applySlot, deleteSlot, listSlots, loadSlot, saveSlot, SLOT_COUNT, type SlotRecord } from '../storage/saves';
-import { readStars, writeStar } from '../storage/stars';
 import { findItem, GROUPS, iconCanvas, QUICK, type ToolName } from './icons';
 
 const BRUSH_CHOICES = [
@@ -47,7 +44,6 @@ export interface SandboxApi {
   step: (n?: number) => void;
   setPaused: (paused: boolean) => void;
   setTempView: (on: boolean) => void;
-  openChallenges: () => void;
   openPicker: () => void;
   closeSheet: () => void;
   aim: () => { x: number; y: number; clientX: number; clientY: number };
@@ -79,11 +75,8 @@ export function mountGame(root: HTMLElement): SandboxApi {
     shape: 'circle' as BrushShape,
     size: 3,
     tool: 'Water' as ToolName,
-    challenge: null as ChallengeRuntime | null,
-    snapshot: null as Uint8Array | null,
-    celebrated: false,
     clearArmed: false,
-    sheet: '' as '' | 'picker' | 'goals' | 'menu',
+    sheet: '' as '' | 'picker' | 'menu',
     pointers: new Map<number, PointerPoint>(),
     painting: false,
     lineAnchor: null as { x: number; y: number } | null,
@@ -161,7 +154,6 @@ export function mountGame(root: HTMLElement): SandboxApi {
       syncPause(state);
       toast(state, error instanceof Error ? error.message : 'The simulation hit an error.');
     }
-    updateChallenge(state);
     const preview = previewCells(state);
     renderer.present(screen, state.view, state.dpr, preview, previewColor(state));
     requestAnimationFrame(frame);
@@ -183,11 +175,8 @@ export function mountGame(root: HTMLElement): SandboxApi {
     resetDemo: () => {
       buildDemo(sim);
       renderer.invalidate();
-      state.challenge = null;
-      state.snapshot = null;
       state.paused = false;
       syncPause(state);
-      ui.banner.hidden = true;
     },
     step: (n = 1) => {
       for (let i = 0; i < n; i++) {
@@ -205,7 +194,6 @@ export function mountGame(root: HTMLElement): SandboxApi {
       renderer.setTemperature(on);
       ui.heat.setAttribute('aria-pressed', on ? 'true' : 'false');
     },
-    openChallenges: () => openSheet(state, 'goals'),
     openPicker: () => openSheet(state, 'picker'),
     closeSheet: () => openSheet(state, ''),
     aim: () => {
@@ -228,7 +216,6 @@ interface Shell {
   speed: HTMLButtonElement;
   heat: HTMLButtonElement;
   sound: HTMLButtonElement;
-  goals: HTMLButtonElement;
   menu: HTMLButtonElement;
   size: HTMLButtonElement;
   sizeMenu: HTMLElement;
@@ -237,7 +224,6 @@ interface Shell {
   all: HTMLButtonElement;
   quick: HTMLElement;
   sheet: HTMLElement;
-  banner: HTMLElement;
   install: HTMLButtonElement;
   toast: HTMLElement;
 }
@@ -258,17 +244,14 @@ function buildShell(root: HTMLElement, canvas: HTMLCanvasElement): Shell {
   const speed = button('1X', 'speed');
   const heat = button('HEAT', 'heat');
   const sound = button('MUTE', 'sound');
-  const goals = button('GOALS', 'goals');
   const menu = button('MENU', 'menu');
   heat.setAttribute('aria-pressed', 'false');
   sound.setAttribute('aria-pressed', 'false');
-  controls.append(play, step, speed, heat, sound, goals, menu);
+  controls.append(play, step, speed, heat, sound, menu);
   const stage = el('div', 'stage');
   stage.append(canvas);
   const status = el('div', 'status');
-  const banner = el('div', 'banner');
-  banner.hidden = true;
-  main.append(header, controls, stage, status, banner);
+  main.append(header, controls, stage, status);
   const dock = el('div', 'dock');
   const brushRow = el('div', 'brushrow');
   const sizeWrap = el('div', 'sizemenu');
@@ -299,7 +282,7 @@ function buildShell(root: HTMLElement, canvas: HTMLCanvasElement): Shell {
   install.hidden = true;
   app.append(main, dock, sheet, toast);
   root.append(app);
-  return { fps, status, play, step, speed, heat, sound, goals, menu, size, sizeMenu, hand, shape, all, quick, sheet, banner, install, toast };
+  return { fps, status, play, step, speed, heat, sound, menu, size, sizeMenu, hand, shape, all, quick, sheet, install, toast };
 }
 
 function wireControls(state: GameState): void {
@@ -333,7 +316,6 @@ function wireControls(state: GameState): void {
     ui.sound.setAttribute('aria-pressed', muted ? 'true' : 'false');
     if (!muted) state.sfx.play('ui');
   });
-  ui.goals.addEventListener('click', () => openSheet(state, state.sheet === 'goals' ? '' : 'goals'));
   ui.menu.addEventListener('click', () => openSheet(state, state.sheet === 'menu' ? '' : 'menu'));
   ui.all.addEventListener('click', () => openSheet(state, 'picker'));
   ui.size.addEventListener('click', (event) => {
@@ -407,11 +389,8 @@ type GameState = {
   spaceDown: boolean;
   gesture: Gesture | null;
   tool: ToolName;
-  challenge: ChallengeRuntime | null;
-  snapshot: Uint8Array | null;
-  celebrated: boolean;
   clearArmed: boolean;
-  sheet: '' | 'picker' | 'goals' | 'menu';
+  sheet: '' | 'picker' | 'menu';
   pointers: Map<number, PointerPoint>;
   painting: boolean;
   lineAnchor: { x: number; y: number } | null;
@@ -660,12 +639,10 @@ function stamp(state: GameState, x: number, y: number): void {
   if (!painted) return;
   const liquid = state.tool === 'Water'
     || state.tool === 'Hydrochloric acid'
-    || state.tool === 'Sodium hydroxide'
-    || state.tool === 'Hydrogen peroxide'
-    || state.tool === 'Soap';
+    || state.tool === 'Sodium hydroxide';
   const sound = liquid
     ? 'water'
-    : state.tool === 'Fire' || state.tool === 'Lava' || state.tool === 'Molten metal'
+    : state.tool === 'Fire' || state.tool === 'Lava' || state.tool === 'Molten metal' || state.tool === 'Molten glass'
       ? 'fire'
       : state.tool === 'Metal'
         ? 'zap'
@@ -713,25 +690,7 @@ function playEvents(state: GameState): void {
   }
 }
 
-function updateChallenge(state: GameState): void {
-  if (!state.challenge) return;
-  const sample = state.challenge.sample(state.sim);
-  const rows = state.ui.banner.querySelectorAll<HTMLElement>('.step');
-  rows.forEach((row, index) => {
-    const done = sample.steps[index] === true;
-    row.classList.toggle('done', done);
-    row.textContent = `${done ? '* ' : '- '}${state.challenge?.steps[index] ?? ''}`;
-  });
-  if (state.celebrated || !sample.won) return;
-  state.celebrated = true;
-  writeStar(localStorage, state.challenge.id);
-  state.sfx.play('win');
-  toast(state, `${state.challenge.name} complete`);
-  const text = state.ui.banner.querySelector('.bannertext');
-  if (text) text.textContent = `${state.challenge.name} complete`;
-}
-
-function openSheet(state: GameState, name: '' | 'picker' | 'goals' | 'menu'): void {
+function openSheet(state: GameState, name: '' | 'picker' | 'menu'): void {
   state.sheet = name;
   state.sfx.play('ui');
   const sheet = state.ui.sheet;
@@ -743,13 +702,12 @@ function openSheet(state: GameState, name: '' | 'picker' | 'goals' | 'menu'): vo
   sheet.hidden = false;
   const head = el('div', 'sheethead');
   const title = el('div', 'sheettitle');
-  title.textContent = name === 'picker' ? 'ELEMENTS' : name === 'goals' ? 'CHALLENGES' : 'MENU';
+  title.textContent = name === 'picker' ? 'ELEMENTS' : 'MENU';
   const close = button('CLOSE', 'close-sheet');
   close.addEventListener('click', () => openSheet(state, ''));
   head.append(title, close);
   sheet.append(head);
   if (name === 'picker') renderPicker(state, sheet);
-  else if (name === 'goals') renderGoals(state, sheet);
   else renderMenu(state, sheet);
 }
 
@@ -771,84 +729,9 @@ function renderPicker(state: GameState, sheet: HTMLElement): void {
   }
 }
 
-function renderGoals(state: GameState, sheet: HTMLElement): void {
-  const stars = new Set(readStars(localStorage));
-  const note = el('p', 'note');
-  note.textContent = 'Optional puzzles. Stars stay on this phone.';
-  sheet.append(note);
-  for (const info of challengeList()) {
-    const row = el('div', 'goal');
-    const copy = el('div', 'goalcopy');
-    const name = el('div', 'goalname');
-    name.textContent = `${stars.has(info.id) ? '* ' : ''}${info.name}`;
-    const goal = el('div', 'goaltext');
-    goal.textContent = info.goal;
-    copy.append(name, goal);
-    for (const line of info.steps) {
-      const step = el('div', 'goaltext');
-      step.textContent = `- ${line}`;
-      copy.append(step);
-    }
-    const play = button('PLAY', `play-${info.id}`);
-    play.addEventListener('click', () => beginChallenge(state, info.id));
-    row.append(copy, play);
-    sheet.append(row);
-  }
-}
-
-function beginChallenge(state: GameState, id: string): void {
-  if (!state.challenge) state.snapshot = encodeWorld(state.sim);
-  state.challenge = startChallenge(state.sim, id);
-  state.celebrated = false;
-  state.paused = true;
-  state.acc = 0;
-  state.renderer.invalidate();
-  syncPause(state);
-  renderBanner(state);
-  openSheet(state, '');
-  toast(state, state.challenge.goal);
-}
-
-function renderBanner(state: GameState): void {
-  const banner = state.ui.banner;
-  banner.replaceChildren();
-  if (!state.challenge) {
-    banner.hidden = true;
-    return;
-  }
-  banner.hidden = false;
-  const text = el('div', 'bannertext');
-  text.textContent = state.celebrated ? `${state.challenge.name} complete` : state.challenge.goal;
-  const steps = el('div', 'steps');
-  for (const line of state.challenge.steps) {
-    const row = el('div', 'step');
-    row.textContent = `- ${line}`;
-    steps.append(row);
-  }
-  const actions = el('div', 'banneractions');
-  const restart = button('RESTART', 'restart-challenge');
-  const exit = button('EXIT', 'exit-challenge');
-  restart.addEventListener('click', () => beginChallenge(state, state.challenge!.id));
-  exit.addEventListener('click', () => exitChallenge(state));
-  actions.append(restart, exit);
-  banner.append(text, steps, actions);
-  updateChallenge(state);
-}
-
-function exitChallenge(state: GameState): void {
-  if (state.snapshot) decodeWorld(state.sim, state.snapshot);
-  state.snapshot = null;
-  state.challenge = null;
-  state.celebrated = false;
-  state.paused = false;
-  state.renderer.invalidate();
-  syncPause(state);
-  state.ui.banner.hidden = true;
-}
-
 function renderMenu(state: GameState, sheet: HTMLElement): void {
   const about = el('p', 'note');
-  about.textContent = 'Paint with one finger. Pinch to look closer. Acid and base warm into salt and water. Fire melts stone and metal. Water hardens them, with steam.';
+  about.textContent = 'Paint with one finger. Pinch to look closer. Glass holds a liquid, and heat passes through it. Acid and base warm into salt and water. Held fire melts stone, metal, and glass.';
   sheet.append(about, state.ui.install);
   const clear = button(state.clearArmed ? 'SURE?' : 'CLEAR ALL', 'clear-all');
   clear.addEventListener('click', () => {
@@ -926,9 +809,6 @@ async function refreshSaves(state: GameState, host: HTMLElement): Promise<void> 
       try {
         applySlot(state.sim, slot);
         state.renderer.invalidate();
-        state.challenge = null;
-        state.snapshot = null;
-        state.ui.banner.hidden = true;
         state.sfx.play('ui');
         openSheet(state, '');
       } catch (error) {

@@ -36,14 +36,9 @@ export function buildDemo(sim: Simulation): void {
   }
   sim.setCell(fx + 1, ground - 4, El.Fire, { aux: 80 });
 
-  cup(sim, 8, ground, 6, 5, El.Acid);
-  cup(sim, 80, ground, 6, 5, El.Base);
-  cup(sim, pond + 2, ground - 10, 7, 4, El.Peroxide);
-  for (let x = pond + 12; x < pond + 16; x++) {
-    sim.setCell(x, ground - 11, El.Stone);
-    sim.setCell(x, ground - 12, El.Iodide);
-  }
-  cup(sim, pond + 18, ground - 10, 6, 3, El.Soap);
+  cup(sim, 8, ground, 6, 5, El.Acid, El.Glass);
+  cup(sim, 80, ground, 6, 5, El.Base, El.Glass);
+  cup(sim, pond + 2, ground - 10, 8, 4, El.Water, El.Glass);
 
   const basin = fx + 8;
   for (let x = basin; x <= basin + 8; x++) sim.setCell(x, ground - 6, El.Stone);
@@ -67,13 +62,13 @@ export function buildDemo(sim: Simulation): void {
   sim.resetScores();
 }
 
-function cup(sim: Simulation, x: number, floor: number, width: number, depth: number, fill: number): void {
+function cup(sim: Simulation, x: number, floor: number, width: number, depth: number, fill: number, wall: number = El.Stone): void {
   const right = x + width;
   const rim = floor - depth - 1;
-  for (let xx = x; xx <= right; xx++) sim.setCell(xx, floor, El.Stone);
+  for (let xx = x; xx <= right; xx++) sim.setCell(xx, floor, wall);
   for (let y = rim; y <= floor; y++) {
-    sim.setCell(x, y, El.Stone);
-    sim.setCell(right, y, El.Stone);
+    sim.setCell(x, y, wall);
+    sim.setCell(right, y, wall);
   }
   for (let xx = x + 1; xx < right; xx++) {
     for (let y = floor - depth; y < floor; y++) sim.setCell(xx, y, fill);

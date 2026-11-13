@@ -227,11 +227,17 @@ export class Renderer {
       r = 16;
       g = 8;
       b = 22;
-    } else if (t === El.Foam) {
-      const bubble = ((x * 5 + y * 3 + sim.variation[i]) & 3) === 0;
-      r = bubble ? 255 : 248;
-      g = bubble ? 252 : 236;
-      b = bubble ? 244 : 214;
+    } else if (t === El.Glass) {
+      const heat = Math.max(0, Math.min(1, (sim.temp[i] - 40) / 500));
+      const pane = ((x + y + sim.variation[i]) & 3) === 0;
+      r = (pane ? 214 : 96) + (255 - (pane ? 214 : 96)) * heat;
+      g = (pane ? 236 : 150) + (150 - (pane ? 236 : 150)) * heat;
+      b = (pane ? 244 : 176) + (48 - (pane ? 244 : 176)) * heat;
+    } else if (t === El.MoltenGlass) {
+      const heat = Math.max(0, Math.min(1, (sim.temp[i] - 700) / 500));
+      r = 255;
+      g = 170 + heat * 70;
+      b = 70 + heat * 80;
     } else {
       const o = (t * 16 + sim.variation[i]) * 3;
       r = LUT[o];
@@ -266,7 +272,7 @@ export class Renderer {
             power = heat * 0.55;
           }
         }
-        if (t === El.Metal) {
+        if (t === El.Metal || t === El.Glass) {
           const heat = Math.max(0, Math.min(1, (sim.temp[i] - 70) / 980));
           if (heat > 0.08) {
             glow = 1;

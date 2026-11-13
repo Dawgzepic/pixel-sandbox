@@ -80,9 +80,6 @@ export class Simulation {
   bodies: Body[] = [];
   nextBodyId = 1;
   events: SimEvent[] = [];
-  /** Oxygen let off slowly, and oxygen let off in a catalyzed rush. */
-  gasSlow = 0;
-  gasFast = 0;
   frame = 0;
   nextPortal = 1;
   rng: Rng;
@@ -312,8 +309,6 @@ export class Simulation {
   resetScores(): void {
     this.generated.fill(0);
     this.userPaint.fill(0);
-    this.gasSlow = 0;
-    this.gasFast = 0;
   }
 
   recomputeCounts(): void {

@@ -8,9 +8,8 @@ export type ToolName =
   | 'Water'
   | 'Hydrochloric acid'
   | 'Sodium hydroxide'
-  | 'Hydrogen peroxide'
-  | 'Potassium iodide'
-  | 'Soap'
+  | 'Glass'
+  | 'Molten glass'
   | 'Fire'
   | 'Smoke'
   | 'Metal'
@@ -64,6 +63,13 @@ function drawElement(ctx: CanvasRenderingContext2D, name: string): void {
     ctx.fillRect(8, 5, 4, 3);
     ctx.fillStyle = '#c8c4ce';
     ctx.fillRect(6, 4, 3, 2);
+  } else if (name === 'Glass') {
+    ctx.fillStyle = '#7eb8cc';
+    ctx.fillRect(4, 4, 8, 8);
+    ctx.fillStyle = '#e7fbff';
+    ctx.fillRect(5, 5, 2, 6);
+    ctx.fillStyle = '#16303a';
+    ctx.fillRect(8, 6, 1, 4);
   } else if (name === 'Fire') {
     ctx.fillRect(7, 3, 2, 3);
     ctx.fillRect(5, 6, 6, 3);
@@ -123,13 +129,10 @@ export const GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
       item('Water'),
       item('Hydrochloric acid'),
       item('Sodium hydroxide'),
-      item('Hydrogen peroxide'),
-      item('Soap'),
     ],
   },
-  { label: 'Crystals', items: [item('Potassium iodide')] },
-  { label: 'Solids', items: [item('Stone'), item('Metal'), item('Ice'), item('Wall')] },
-  { label: 'Heat', items: [item('Fire'), item('Lava'), item('Molten metal'), item('Steam'), item('Smoke')] },
+  { label: 'Solids', items: [item('Stone'), item('Glass'), item('Metal'), item('Ice'), item('Wall')] },
+  { label: 'Heat', items: [item('Fire'), item('Lava'), item('Molten metal'), item('Molten glass'), item('Steam'), item('Smoke')] },
   {
     label: 'Objects',
     items: [
@@ -145,9 +148,7 @@ export const QUICK: ToolName[] = [
   'Water',
   'Hydrochloric acid',
   'Sodium hydroxide',
-  'Hydrogen peroxide',
-  'Potassium iodide',
-  'Soap',
+  'Glass',
   'Fire',
   'Stone',
   'Metal',

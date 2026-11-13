@@ -67,10 +67,11 @@ export function stepHeat(sim: Simulation): void {
   temp.set(tempNext);
   inject(sim);
   coolStone(sim);
+  shareThroughGlass(sim);
   phase(sim);
 }
 
-/** Hot stone and hot metal fade toward room temperature. Water next to them pulls heat out faster. */
+/** Hot stone and hot metal fade toward room temperature. Water next to them pulls heat out faster. Glass is left to conduction so a flame outside a dish can boil what is inside. */
 function coolStone(sim: Simulation): void {
   const { w, h, chunkCols, chunkRows, chunkTtl, type, temp } = sim;
   for (let cy = 0; cy < chunkRows; cy++) {
@@ -134,7 +135,7 @@ function inject(sim: Simulation): void {
             add(sim, x + 1, y, TUNING.fireInject);
             const i = y * w + x;
             if (sim.temp[i] < 460) sim.temp[i] = 460;
-          } else if (t === El.Lava || t === El.Molten) {
+          } else if (t === El.Lava || t === El.Molten || t === El.MoltenGlass) {
             add(sim, x, y - 1, TUNING.lavaInject);
             add(sim, x, y + 1, TUNING.lavaInject);
             add(sim, x - 1, y, TUNING.lavaInject);
@@ -155,10 +156,51 @@ function add(sim: Simulation, x: number, y: number, delta: number): void {
   if (!sim.inBounds(x, y) || sim.isBorder(x, y)) return;
   const t = sim.type[sim.idx(x, y)];
   // Stone and metal cool lava by conduction. A direct blast would keep lava molten forever.
+  // Glass is not in this list: a flame against a dish has to warm the glass, and the glass passes that heat inward.
   if (t === El.Stone || t === El.Metal || t === El.Wall) return;
   const i = sim.idx(x, y);
   sim.temp[i] = clampTemp(sim.temp[i] + delta);
   sim.wake(x, y);
+}
+
+/**
+ * A glass pane should not insulate the dish. Each tick it hands part of its
+ * temperature difference to the material on the other side, so a flame outside
+ * can bring the liquid inside to a boil.
+ */
+function shareThroughGlass(sim: Simulation): void {
+  const { w, h, type, temp } = sim;
+  const delta = new Int32Array(temp.length);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const t = type[i];
+      if (t !== El.Glass && t !== El.MoltenGlass) continue;
+      const tp = temp[i];
+      for (let k = 0; k < 4; k++) {
+        const nx = x + DX[k];
+        const ny = y + DY[k];
+        if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+        const j = ny * w + nx;
+        const nt = type[j];
+        if (nt === El.Empty && Math.abs(temp[j] - AMBIENT) < 2) continue;
+        if (nt === El.Glass || nt === El.MoltenGlass) continue;
+        const diff = tp - temp[j];
+        let flow = Math.trunc(diff * 0.35);
+        if (flow === 0 && Math.abs(diff) >= 4) flow = diff > 0 ? 1 : -1;
+        if (flow === 0) continue;
+        delta[i] -= flow;
+        delta[j] += flow;
+      }
+    }
+  }
+  for (let i = 0; i < delta.length; i++) {
+    if (delta[i] === 0) continue;
+    temp[i] = clampTemp(temp[i] + delta[i]);
+    const x = i % w;
+    const y = (i / w) | 0;
+    sim.wake(x, y);
+  }
 }
 
 function chill(sim: Simulation, x: number, y: number): void {

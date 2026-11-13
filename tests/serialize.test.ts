@@ -8,8 +8,8 @@ describe('save bytes', () => {
     const world = new Simulation(30, 22, 11);
     world.setCell(3, 4, El.Ice);
     world.setTemp(3, 4, -15);
-    world.setCell(8, 8, El.Peroxide, { aux: 2 });
-    world.setCell(9, 8, El.Iodide);
+    world.setCell(8, 8, El.Glass, { aux: 2 });
+    world.setCell(9, 8, El.Salt);
     world.paintUser(4, 6, El.Water);
     const body = world.spawnBody('ball', 12, 6);
     expect(body).not.toBeNull();
@@ -20,9 +20,9 @@ describe('save bytes', () => {
     decodeWorld(copy, bytes);
     expect(copy.get(3, 4)).toBe(El.Ice);
     expect(copy.getTemp(3, 4)).toBe(-15);
-    expect(copy.get(8, 8)).toBe(El.Peroxide);
+    expect(copy.get(8, 8)).toBe(El.Glass);
     expect(copy.aux[copy.idx(8, 8)]).toBe(2);
-    expect(copy.get(9, 8)).toBe(El.Iodide);
+    expect(copy.get(9, 8)).toBe(El.Salt);
     expect(copy.bodies).toHaveLength(1);
     expect(copy.bodies[0].kind).toBe('ball');
     expect(copy.bodies[0].x).toBeCloseTo(12);

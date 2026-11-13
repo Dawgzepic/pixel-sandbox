@@ -41,9 +41,9 @@ describe('challenge stars', () => {
       },
     };
     expect(readStars(storage)).toEqual([]);
-    writeStar(storage, 'giant-foam');
-    writeStar(storage, 'giant-foam');
+    writeStar(storage, 'warm-glass');
+    writeStar(storage, 'warm-glass');
     writeStar(storage, 'make-stone');
-    expect(readStars(storage).sort()).toEqual(['giant-foam', 'make-stone']);
+    expect(readStars(storage).sort()).toEqual(['make-stone', 'warm-glass']);
   });
 });
