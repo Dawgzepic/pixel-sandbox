@@ -1,7 +1,7 @@
 import { DEFS, El, GLOW } from '../sim/elements';
 import type { Simulation } from '../sim/simulation';
-import type { Body } from '../sim/physics';
 import type { View } from './camera';
+import { showsBubble } from './bubbles';
 
 const LUT = buildLut();
 
@@ -94,6 +94,7 @@ export class Renderer {
     dpr: number,
     preview: Array<[number, number]> | null,
     previewRgb: [number, number, number],
+    outline: Array<[number, number]> | null = null,
   ): void {
     this.syncChunks();
     const cssW = screen.canvas.width / dpr;
@@ -113,8 +114,8 @@ export class Renderer {
       view.dw,
       view.dh,
     );
-    this.drawBodies(screen, view);
     if (preview) this.drawPreview(screen, view, preview, previewRgb);
+    if (outline && outline.length) this.drawOutline(screen, view, outline);
     if (this.sim.flash > 0) {
       screen.fillStyle = `rgba(255, 236, 190, ${Math.min(0.55, this.sim.flash / 8)})`;
       screen.fillRect(view.ox, view.oy, view.dw, view.dh);
@@ -233,6 +234,10 @@ export class Renderer {
       r = (pane ? 214 : 96) + (255 - (pane ? 214 : 96)) * heat;
       g = (pane ? 236 : 150) + (150 - (pane ? 236 : 150)) * heat;
       b = (pane ? 244 : 176) + (48 - (pane ? 244 : 176)) * heat;
+    } else if (t === El.Water && showsBubble(x, y, sim.frame, sim.temp[i])) {
+      r = 236;
+      g = 248;
+      b = 255;
     } else if (t === El.MoltenGlass) {
       const heat = Math.max(0, Math.min(1, (sim.temp[i] - 700) / 500));
       r = 255;
@@ -301,41 +306,14 @@ export class Renderer {
     }
   }
 
-  private drawBodies(screen: CanvasRenderingContext2D, view: View): void {
-    for (const body of this.sim.bodies) this.drawBody(screen, view, body);
-  }
-
-  private drawBody(screen: CanvasRenderingContext2D, view: View, body: Body): void {
-    const center = worldToCss(body.x, body.y, view);
-    screen.save();
-    screen.translate(center.x, center.y);
-    screen.rotate(body.angle);
-    const cracked = body.health < body.maxHealth * 0.45;
-    screen.fillStyle = cracked ? '#6a3a22' : '#a86b3c';
-    screen.strokeStyle = '#3a2414';
-    screen.lineWidth = Math.max(1, view.scale * 0.15);
-    if (body.kind === 'ball') {
-      const r = body.hw * view.scale;
-      screen.beginPath();
-      screen.arc(0, 0, r, 0, Math.PI * 2);
-      screen.fill();
-      screen.stroke();
-      screen.fillStyle = '#e6c39a';
-      screen.beginPath();
-      screen.arc(-r * 0.3, -r * 0.3, r * 0.28, 0, Math.PI * 2);
-      screen.fill();
-    } else {
-      const w = body.hw * 2 * view.scale;
-      const h = body.hh * 2 * view.scale;
-      screen.fillRect(-w / 2, -h / 2, w, h);
-      screen.strokeRect(-w / 2, -h / 2, w, h);
-      screen.strokeStyle = '#e6c39a';
-      screen.beginPath();
-      screen.moveTo(-w / 2 + 2, 0);
-      screen.lineTo(w / 2 - 2, 0);
-      screen.stroke();
+  private drawOutline(screen: CanvasRenderingContext2D, view: View, cells: Array<[number, number]>): void {
+    const s = view.scale;
+    screen.strokeStyle = '#ffe6a8';
+    screen.lineWidth = Math.max(2, s * 0.18);
+    for (const [x, y] of cells) {
+      const p = worldToCss(x, y, view);
+      screen.strokeRect(p.x + 1, p.y + 1, Math.max(1, s - 2), Math.max(1, s - 2));
     }
-    screen.restore();
   }
 
   private drawPreview(

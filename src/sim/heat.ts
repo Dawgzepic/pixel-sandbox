@@ -42,7 +42,8 @@ export function stepHeat(sim: Simulation): void {
             const nType = type[j];
             const stillAir = nType === El.Empty && Math.abs(nt - AMBIENT) < 2;
             if (stillAir) {
-              if (tp > 70) {
+              // Glass keeps its heat instead of leaking into open air, so a held flame can climb all the way to a melt.
+              if (tp > 70 && t !== El.Glass) {
                 sum += AMBIENT;
                 n++;
               }
@@ -157,7 +158,7 @@ function add(sim: Simulation, x: number, y: number, delta: number): void {
   const t = sim.type[sim.idx(x, y)];
   // Stone and metal cool lava by conduction. A direct blast would keep lava molten forever.
   // Glass is not in this list: a flame against a dish has to warm the glass, and the glass passes that heat inward.
-  if (t === El.Stone || t === El.Metal || t === El.Wall) return;
+  if (t === El.Stone || t === El.Metal) return;
   const i = sim.idx(x, y);
   sim.temp[i] = clampTemp(sim.temp[i] + delta);
   sim.wake(x, y);
@@ -183,8 +184,8 @@ function shareThroughGlass(sim: Simulation): void {
         if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
         const j = ny * w + nx;
         const nt = type[j];
-        if (nt === El.Empty && Math.abs(temp[j] - AMBIENT) < 2) continue;
-        if (nt === El.Glass || nt === El.MoltenGlass) continue;
+        // Open air is not a heat sink. A pane should pass heat into a real material, and stay molten once it finally melts.
+        if (nt === El.Empty || nt === El.Glass || nt === El.MoltenGlass) continue;
         const diff = tp - temp[j];
         let flow = Math.trunc(diff * 0.35);
         if (flow === 0 && Math.abs(diff) >= 4) flow = diff > 0 ? 1 : -1;

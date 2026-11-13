@@ -3,7 +3,7 @@ import { El, elementByName } from '../src/sim/elements';
 
 const MATERIALS = [
   'Water', 'Hydrochloric acid', 'Sodium hydroxide', 'Glass',
-  'Fire', 'Smoke', 'Metal', 'Molten metal', 'Molten glass', 'Ice', 'Steam', 'Lava', 'Stone', 'Wall',
+  'Fire', 'Smoke', 'Metal', 'Molten metal', 'Molten glass', 'Ice', 'Steam', 'Lava', 'Stone',
 ] as const;
 
 test.beforeEach(async ({ page }) => {
@@ -22,17 +22,17 @@ test('phone screen shows the sandbox, picker, and temperature', async ({ page })
   await expect(page.locator('.sheet').getByRole('button', { name: 'Hydrochloric acid (HCl)' })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Sodium hydroxide (NaOH)' })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Glass (SiO2)' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Warmer' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Cooler' })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Lava' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'GOALS' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'HEAT' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Wall' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Box' })).toHaveCount(0);
   await expect(page.getByText('Seed')).toHaveCount(0);
   await expect(page.getByText('Hydrogen peroxide')).toHaveCount(0);
   await page.screenshot({ path: '/opt/cursor/artifacts/pixel-sandbox-picker.png' });
   await page.getByRole('button', { name: 'CLOSE' }).click();
-
-  await page.getByRole('button', { name: 'HEAT' }).click();
-  await expect(page.getByRole('button', { name: 'HEAT' })).toHaveAttribute('aria-pressed', 'true');
-  await page.screenshot({ path: '/opt/cursor/artifacts/pixel-sandbox-temperature.png' });
-  await page.getByRole('button', { name: 'HEAT' }).click();
 });
 
 test('paints every element by touch and runs a water-lava reaction', async ({ page }) => {
@@ -56,18 +56,6 @@ test('paints every element by touch and runs a water-lava reaction', async ({ pa
       return window.__PIXEL_SANDBOX__!.sim.get(x, y) === elementId;
     }, { x: spot.x, y: spot.y, elementId: id });
     expect(painted, name).toBe(true);
-  }
-
-  for (const name of ['Box', 'Ball', 'Plank'] as const) {
-    await page.evaluate((tool) => {
-      const api = window.__PIXEL_SANDBOX__!;
-      api.clear();
-      api.select(tool);
-    }, name);
-    const spot = await page.evaluate(() => window.__PIXEL_SANDBOX__!.aim());
-    await page.touchscreen.tap(spot.clientX, spot.clientY);
-    const count = await page.evaluate(() => window.__PIXEL_SANDBOX__!.sim.bodies.length);
-    expect(count, name).toBe(1);
   }
 
   await page.evaluate(() => {

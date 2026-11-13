@@ -2,9 +2,8 @@ import { DEFS, El, elementByName, elementLabel } from '../sim/elements';
 
 export type ToolName =
   | 'Eraser'
-  | 'Box'
-  | 'Ball'
-  | 'Plank'
+  | 'Warmer'
+  | 'Cooler'
   | 'Water'
   | 'Hydrochloric acid'
   | 'Sodium hydroxide'
@@ -17,8 +16,7 @@ export type ToolName =
   | 'Ice'
   | 'Steam'
   | 'Lava'
-  | 'Stone'
-  | 'Wall';
+  | 'Stone';
 
 const cache = new Map<string, HTMLCanvasElement>();
 
@@ -34,9 +32,8 @@ export function iconCanvas(name: string): HTMLCanvasElement {
   ctx.fillStyle = '#1a1022';
   ctx.fillRect(0, 0, 16, 16);
   if (name === 'Eraser') drawEraser(ctx);
-  else if (name === 'Box') drawBox(ctx);
-  else if (name === 'Ball') drawBall(ctx);
-  else if (name === 'Plank') drawPlank(ctx);
+  else if (name === 'Warmer') drawWarmer(ctx);
+  else if (name === 'Cooler') drawCooler(ctx);
   else drawElement(ctx, name);
   cache.set(name, canvas);
   return canvas;
@@ -95,25 +92,23 @@ function drawEraser(ctx: CanvasRenderingContext2D): void {
   ctx.stroke();
 }
 
-function drawBox(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = '#a86b3c';
-  ctx.fillRect(3, 3, 10, 10);
-  ctx.strokeStyle = '#3a2414';
-  ctx.strokeRect(3.5, 3.5, 9, 9);
+function drawWarmer(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = '#ff8a3c';
+  ctx.fillRect(7, 3, 2, 4);
+  ctx.fillRect(5, 6, 6, 3);
+  ctx.fillRect(6, 9, 4, 3);
+  ctx.fillStyle = '#ffe38a';
+  ctx.fillRect(7, 7, 2, 2);
 }
 
-function drawBall(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = '#a86b3c';
-  ctx.beginPath();
-  ctx.arc(8, 8, 5, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawPlank(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = '#a86b3c';
-  ctx.fillRect(2, 6, 12, 4);
-  ctx.strokeStyle = '#3a2414';
-  ctx.strokeRect(2.5, 6.5, 11, 3);
+function drawCooler(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = '#9ad7ff';
+  ctx.fillRect(7, 3, 2, 2);
+  ctx.fillRect(5, 6, 6, 2);
+  ctx.fillRect(6, 9, 4, 2);
+  ctx.fillRect(7, 12, 2, 2);
+  ctx.fillStyle = '#e7fbff';
+  ctx.fillRect(7, 6, 2, 2);
 }
 
 export interface PaletteItem {
@@ -131,28 +126,30 @@ export const GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
       item('Sodium hydroxide'),
     ],
   },
-  { label: 'Solids', items: [item('Stone'), item('Glass'), item('Metal'), item('Ice'), item('Wall')] },
+  { label: 'Solids', items: [item('Stone'), item('Glass'), item('Metal'), item('Ice')] },
   { label: 'Heat', items: [item('Fire'), item('Lava'), item('Molten metal'), item('Molten glass'), item('Steam'), item('Smoke')] },
   {
-    label: 'Objects',
+    label: 'Tools',
     items: [
-      { name: 'Box', label: 'Box', blurb: 'A wooden crate. Falls, stacks, burns, and breaks down in acid.' },
-      { name: 'Ball', label: 'Ball', blurb: 'A wooden ball. Rolls, bumps, and splashes liquids aside.' },
-      { name: 'Plank', label: 'Plank', blurb: 'A wooden plank. Tumbles and can lie across a gap.' },
-      { name: 'Eraser', label: 'Eraser', blurb: 'Removes elements and objects. Walls included.' },
+      { name: 'Warmer', label: 'Warmer', blurb: 'Heats whatever is already there. Hold it to boil water or melt a solid.' },
+      { name: 'Cooler', label: 'Cooler', blurb: 'Cools whatever is already there. Hold it to freeze water into ice.' },
+      { name: 'Eraser', label: 'Eraser', blurb: 'Removes elements. The outline shows the brush.' },
     ],
   },
 ];
+
+export const OUTLINE_TOOLS: ReadonlySet<ToolName> = new Set(['Eraser', 'Warmer', 'Cooler']);
 
 export const QUICK: ToolName[] = [
   'Water',
   'Hydrochloric acid',
   'Sodium hydroxide',
   'Glass',
+  'Warmer',
+  'Cooler',
   'Fire',
   'Stone',
   'Metal',
-  'Lava',
   'Eraser',
 ];
 

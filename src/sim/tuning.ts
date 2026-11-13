@@ -14,6 +14,12 @@ export const TUNING = {
   fireInject: 14,
   /** Heat added to a cell each time the fire brush is held on it. */
   fireBrush: 110,
+  /** Glass takes a long hold. The same small step is used by fire and Warmer. */
+  glassHeat: 4,
+  /** Warmer brush. Boils water after a short hold, not in one tap. */
+  warmer: 16,
+  /** Cooler brush. Freezes water only after the temperature is held down. */
+  cooler: 2,
   lavaInject: 5,
   iceChill: 2,
   explodeRadius: 6,

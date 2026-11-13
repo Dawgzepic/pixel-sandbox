@@ -50,15 +50,6 @@ export function buildDemo(sim: Simulation): void {
     for (let y = ground - 5; y < ground; y++) sim.setCell(x, y, El.Lava);
   }
 
-  const top = ground;
-  sim.spawnBody('box', left + 6, top - 2.5);
-  sim.spawnBody('ball', pond + 6, top - 2.15);
-  for (const b of sim.bodies) {
-    b.asleep = true;
-    b.vx = 0;
-    b.vy = 0;
-    b.av = 0;
-  }
   sim.resetScores();
 }
 

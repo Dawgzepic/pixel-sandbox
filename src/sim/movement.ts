@@ -1,5 +1,4 @@
 import { ACID_RESIST, DENSITY, El, findPair, FLAMMABLE, IS_GAS, IS_LIQUID, MOVABLE } from './elements';
-import { stampBodies } from './physics';
 import type { Simulation } from './simulation';
 
 const DX = [0, 0, -1, 1];
@@ -7,7 +6,6 @@ const DY = [-1, 1, 0, 0];
 
 /** Powders fall, liquids flow, gases rise and drift, foam holds its column. */
 export function stepMovement(sim: Simulation): void {
-  stampBodies(sim);
   let minY = sim.h;
   let maxY = -1;
   for (let cy = 0; cy < sim.chunkRows; cy++) {

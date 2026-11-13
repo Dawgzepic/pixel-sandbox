@@ -8,7 +8,7 @@ import { GRID_H, GRID_W } from '../sim/tuning';
 import { cellFromLocal, layoutView, panBy, type View } from '../render/camera';
 import { Renderer, worldToCss } from '../render/renderer';
 import { applySlot, deleteSlot, listSlots, loadSlot, saveSlot, SLOT_COUNT, type SlotRecord } from '../storage/saves';
-import { findItem, GROUPS, iconCanvas, QUICK, type ToolName } from './icons';
+import { findItem, GROUPS, iconCanvas, OUTLINE_TOOLS, QUICK, type ToolName } from './icons';
 
 const BRUSH_CHOICES = [
   { label: 'Tiny', px: 1 },
@@ -43,7 +43,6 @@ export interface SandboxApi {
   resetDemo: () => void;
   step: (n?: number) => void;
   setPaused: (paused: boolean) => void;
-  setTempView: (on: boolean) => void;
   openPicker: () => void;
   closeSheet: () => void;
   aim: () => { x: number; y: number; clientX: number; clientY: number };
@@ -71,7 +70,6 @@ export function mountGame(root: HTMLElement): SandboxApi {
     ui,
     paused: false,
     speedIndex: 2,
-    tempView: false,
     shape: 'circle' as BrushShape,
     size: 3,
     tool: 'Water' as ToolName,
@@ -81,6 +79,7 @@ export function mountGame(root: HTMLElement): SandboxApi {
     painting: false,
     lineAnchor: null as { x: number; y: number } | null,
     lastCell: null as { x: number; y: number } | null,
+    cursor: null as { x: number; y: number } | null,
     hand: false,
     spaceDown: false,
     gesture: null as Gesture | null,
@@ -140,7 +139,7 @@ export function mountGame(root: HTMLElement): SandboxApi {
         state.acc += SPEEDS[state.speedIndex];
         let steps = 0;
         while (state.acc >= 1 && steps < 4) {
-          holdFire(state);
+          holdBrush(state);
           sim.step();
           playEvents(state);
           state.acc -= 1;
@@ -155,7 +154,7 @@ export function mountGame(root: HTMLElement): SandboxApi {
       toast(state, error instanceof Error ? error.message : 'The simulation hit an error.');
     }
     const preview = previewCells(state);
-    renderer.present(screen, state.view, state.dpr, preview, previewColor(state));
+    renderer.present(screen, state.view, state.dpr, preview, previewColor(state), outlineCells(state));
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
@@ -189,11 +188,6 @@ export function mountGame(root: HTMLElement): SandboxApi {
       state.acc = 0;
       syncPause(state);
     },
-    setTempView: (on) => {
-      state.tempView = on;
-      renderer.setTemperature(on);
-      ui.heat.setAttribute('aria-pressed', on ? 'true' : 'false');
-    },
     openPicker: () => openSheet(state, 'picker'),
     closeSheet: () => openSheet(state, ''),
     aim: () => {
@@ -214,7 +208,6 @@ interface Shell {
   play: HTMLButtonElement;
   step: HTMLButtonElement;
   speed: HTMLButtonElement;
-  heat: HTMLButtonElement;
   sound: HTMLButtonElement;
   menu: HTMLButtonElement;
   size: HTMLButtonElement;
@@ -242,12 +235,10 @@ function buildShell(root: HTMLElement, canvas: HTMLCanvasElement): Shell {
   const play = button('PAUSE', 'pause');
   const step = button('STEP', 'step');
   const speed = button('1X', 'speed');
-  const heat = button('HEAT', 'heat');
   const sound = button('MUTE', 'sound');
   const menu = button('MENU', 'menu');
-  heat.setAttribute('aria-pressed', 'false');
   sound.setAttribute('aria-pressed', 'false');
-  controls.append(play, step, speed, heat, sound, menu);
+  controls.append(play, step, speed, sound, menu);
   const stage = el('div', 'stage');
   stage.append(canvas);
   const status = el('div', 'status');
@@ -282,7 +273,7 @@ function buildShell(root: HTMLElement, canvas: HTMLCanvasElement): Shell {
   install.hidden = true;
   app.append(main, dock, sheet, toast);
   root.append(app);
-  return { fps, status, play, step, speed, heat, sound, menu, size, sizeMenu, hand, shape, all, quick, sheet, install, toast };
+  return { fps, status, play, step, speed, sound, menu, size, sizeMenu, hand, shape, all, quick, sheet, install, toast };
 }
 
 function wireControls(state: GameState): void {
@@ -301,13 +292,6 @@ function wireControls(state: GameState): void {
     state.speedIndex = (state.speedIndex + 1) % SPEEDS.length;
     const label = SPEEDS[state.speedIndex] === 0.25 ? '1/4X' : SPEEDS[state.speedIndex] === 0.5 ? '1/2X' : `${SPEEDS[state.speedIndex]}X`;
     ui.speed.textContent = label;
-  });
-  ui.heat.addEventListener('click', () => {
-    state.sfx.resume();
-    state.sfx.play('ui');
-    state.tempView = !state.tempView;
-    state.renderer.setTemperature(state.tempView);
-    ui.heat.setAttribute('aria-pressed', state.tempView ? 'true' : 'false');
   });
   ui.sound.addEventListener('click', () => {
     state.sfx.resume();
@@ -382,7 +366,6 @@ type GameState = {
   ui: Shell;
   paused: boolean;
   speedIndex: number;
-  tempView: boolean;
   shape: BrushShape;
   size: number;
   hand: boolean;
@@ -395,6 +378,7 @@ type GameState = {
   painting: boolean;
   lineAnchor: { x: number; y: number } | null;
   lastCell: { x: number; y: number } | null;
+  cursor: { x: number; y: number } | null;
   zoom: number;
   panX: number;
   panY: number;
@@ -541,6 +525,7 @@ function applyGesture(state: GameState): void {
 
 function onPointerDown(state: GameState, event: PointerEvent): void {
   event.preventDefault();
+  rememberCursor(state, event);
   state.sfx.resume();
   state.canvas.setPointerCapture(event.pointerId);
   const pan = state.hand || state.spaceDown || event.button === 1 || event.button === 2;
@@ -559,18 +544,12 @@ function onPointerDown(state: GameState, event: PointerEvent): void {
     state.lineAnchor = cell;
     return;
   }
-  if (state.tool === 'Box' || state.tool === 'Ball' || state.tool === 'Plank') {
-    const body = state.sim.spawnBody(state.tool.toLowerCase() as 'box' | 'ball' | 'plank', cell.x + 0.5, cell.y + 0.5);
-    if (!body) toast(state, 'No room for that object.');
-    else state.sfx.play('sand');
-    state.painting = false;
-    return;
-  }
   stamp(state, cell.x, cell.y);
   state.lastCell = cell;
 }
 
 function onPointerMove(state: GameState, event: PointerEvent): void {
+  rememberCursor(state, event);
   const previous = state.pointers.get(event.pointerId);
   if (!previous) return;
   event.preventDefault();
@@ -606,9 +585,10 @@ function onPointerUp(state: GameState, event: PointerEvent): void {
   state.lastCell = null;
 }
 
-/** Keep heating the cells under a held fire brush, once per simulation step. */
-function holdFire(state: GameState): void {
-  if (!state.painting || state.tool !== 'Fire' || !state.lastCell || state.shape === 'line') return;
+/** Keep applying a held fire, warmer, or cooler brush once per simulation step. */
+function holdBrush(state: GameState): void {
+  if (!state.painting || !state.lastCell || state.shape === 'line') return;
+  if (state.tool !== 'Fire' && state.tool !== 'Warmer' && state.tool !== 'Cooler') return;
   if (state.pointers.size !== 1) return;
   const shape = state.shape === 'square' ? 'square' : 'circle';
   const cells = state.shape === 'spray'
@@ -616,7 +596,9 @@ function holdFire(state: GameState): void {
     : brushCells(state.lastCell.x, state.lastCell.y, state.size, shape);
   for (const [cx, cy] of cells) {
     if (!state.sim.inBounds(cx, cy) || state.sim.isBorder(cx, cy)) continue;
-    state.sim.paintUser(cx, cy, El.Fire);
+    if (state.tool === 'Fire') state.sim.paintUser(cx, cy, El.Fire);
+    else if (state.tool === 'Warmer') state.sim.warm(cx, cy);
+    else state.sim.cool(cx, cy);
   }
 }
 
@@ -629,6 +611,8 @@ function stamp(state: GameState, x: number, y: number): void {
   for (const [cx, cy] of cells) {
     if (!state.sim.inBounds(cx, cy) || state.sim.isBorder(cx, cy)) continue;
     if (state.tool === 'Eraser') state.sim.eraseAt(cx, cy);
+    else if (state.tool === 'Warmer') state.sim.warm(cx, cy);
+    else if (state.tool === 'Cooler') state.sim.cool(cx, cy);
     else {
       const id = elementByName(state.tool)?.id;
       if (id === undefined) continue;
@@ -731,7 +715,7 @@ function renderPicker(state: GameState, sheet: HTMLElement): void {
 
 function renderMenu(state: GameState, sheet: HTMLElement): void {
   const about = el('p', 'note');
-  about.textContent = 'Paint with one finger. Pinch to look closer. Glass holds a liquid, and heat passes through it. Acid and base warm into salt and water. Held fire melts stone, metal, and glass.';
+  about.textContent = 'Paint with one finger. Pinch to look closer. Glass holds a liquid and lets heat through. Warmer and Cooler change temperature without painting over. Acid and base make salt, and salt dissolves into pale saltwater.';
   sheet.append(about, state.ui.install);
   const clear = button(state.clearArmed ? 'SURE?' : 'CLEAR ALL', 'clear-all');
   clear.addEventListener('click', () => {
@@ -867,7 +851,18 @@ function toolButton(name: ToolName): HTMLButtonElement {
 }
 
 function isElementTool(name: ToolName): boolean {
-  return name !== 'Box' && name !== 'Ball' && name !== 'Plank';
+  return name !== 'Eraser' && name !== 'Warmer' && name !== 'Cooler';
+}
+
+function rememberCursor(state: GameState, event: PointerEvent): void {
+  state.cursor = cellFromClient(state, event.clientX, event.clientY);
+}
+
+function outlineCells(state: GameState): Array<[number, number]> | null {
+  if (!state.cursor || !OUTLINE_TOOLS.has(state.tool)) return null;
+  if (state.hand || state.spaceDown) return null;
+  const shape = state.shape === 'square' ? 'square' : 'circle';
+  return brushCells(state.cursor.x, state.cursor.y, state.size, shape);
 }
 
 function button(text: string, testId: string): HTMLButtonElement {

@@ -11,11 +11,9 @@ import { Rng } from './rng';
 import { stepElectricity } from './electricity';
 import { stepHeat } from './heat';
 import { stepMovement } from './movement';
-import { overlapsSolid, pointInBody, stepPhysics, type Body, type BodyKind } from './physics';
 import { stepReactions } from './reactions';
 import { AMBIENT, CHUNK, TUNING } from './tuning';
 
-export type { Body, BodyKind };
 export type CellOrigin = 'user' | 'system';
 
 export interface SetOpts {
@@ -77,8 +75,6 @@ export class Simulation {
   /** Cells the player painted, including brush reactions they triggered. */
   userPaint: Int32Array;
 
-  bodies: Body[] = [];
-  nextBodyId = 1;
   events: SimEvent[] = [];
   frame = 0;
   nextPortal = 1;
@@ -185,7 +181,6 @@ export class Simulation {
     if (!this.inBounds(x, y) || this.isBorder(x, y)) return;
     if (el < 0 || el >= ELEMENT_COUNT || RETIRED[el]) return;
     const prev = this.type[this.idx(x, y)];
-    if (prev === El.Wall && el !== El.Empty) return;
     if (el === El.Fire && prev !== El.Empty && prev !== El.Fire) {
       this.userPaint[el]++;
       this.scorch(x, y);
@@ -215,19 +210,48 @@ export class Simulation {
     this.setCell(x, y, el, { origin: 'user', aux: opts?.aux });
   }
 
-  /** Fire brush heats the cell. It never replaces what is already there. */
+  /** Fire brush heats the cell. It never replaces what is already there. Glass heats slowly. */
   private scorch(x: number, y: number): void {
+    this.addHeat(x, y, this.heatGain(x, y, TUNING.fireBrush));
+  }
+
+  /** Warmer brush. Empty air is left alone. */
+  warm(x: number, y: number): void {
+    if (!this.inBounds(x, y) || this.isBorder(x, y)) return;
+    if (this.type[this.idx(x, y)] === El.Empty) return;
+    this.addHeat(x, y, this.heatGain(x, y, TUNING.warmer));
+  }
+
+  /** Cooler brush. Empty air is left alone. */
+  cool(x: number, y: number): void {
+    if (!this.inBounds(x, y) || this.isBorder(x, y)) return;
+    if (this.type[this.idx(x, y)] === El.Empty) return;
+    this.addHeat(x, y, -TUNING.cooler);
+  }
+
+  private heatGain(x: number, y: number, requested: number): number {
+    return this.type[this.idx(x, y)] === El.Glass ? TUNING.glassHeat : requested;
+  }
+
+  private addHeat(x: number, y: number, delta: number): void {
     const i = this.idx(x, y);
-    this.temp[i] = clampTemp(this.temp[i] + TUNING.fireBrush);
+    this.temp[i] = clampTemp(this.temp[i] + delta);
+    // Glass sheds heat into whatever it touches, so a temperature spike would
+    // melt a dish at once. A held brush has to soak the pane instead.
+    if (delta > 0 && this.type[i] === El.Glass) {
+      const soaked = Math.min(255, this.aux2[i] + 1);
+      this.aux2[i] = soaked;
+      if (soaked >= 200) {
+        this.setCell(x, y, El.MoltenGlass, { temp: 1320, origin: 'system' });
+        return;
+      }
+    }
     this.wake(x, y);
   }
 
   eraseAt(x: number, y: number): void {
     if (!this.inBounds(x, y) || this.isBorder(x, y)) return;
     this.setCell(x, y, El.Empty, { origin: 'user' });
-    const px = x + 0.5;
-    const py = y + 0.5;
-    this.bodies = this.bodies.filter((b) => !pointInBody(b, px, py));
   }
 
   swap(x: number, y: number, nx: number, ny: number): void {
@@ -274,38 +298,6 @@ export class Simulation {
     return null;
   }
 
-  spawnBody(kind: BodyKind, x: number, y: number): Body | null {
-    if (this.bodies.length >= TUNING.maxBodies) return null;
-    const preset = PRESETS[kind];
-    const body: Body = {
-      id: this.nextBodyId++,
-      kind,
-      x,
-      y,
-      vx: 0,
-      vy: 0,
-      angle: 0,
-      av: 0,
-      hw: preset.hw,
-      hh: preset.hh,
-      health: preset.health,
-      maxHealth: preset.health,
-      grounded: false,
-      asleep: false,
-      sleep: 0,
-      hurt: '',
-    };
-    if (body.x - body.hw < 1 || body.y - body.hh < 1) return null;
-    if (body.x + body.hw > this.w - 1 || body.y + body.hh > this.h - 1) return null;
-    if (overlapsSolid(this, body)) return null;
-    for (const other of this.bodies) {
-      if (bodiesOverlap(body, other)) return null;
-    }
-    this.bodies.push(body);
-    this.wake(x | 0, y | 0);
-    return body;
-  }
-
   resetScores(): void {
     this.generated.fill(0);
     this.userPaint.fill(0);
@@ -326,7 +318,6 @@ export class Simulation {
     this.impulseX.fill(0);
     this.impulseY.fill(0);
     this.flash = 0;
-    this.bodies.length = 0;
     this.events.length = 0;
     this.recomputeCounts();
     this.addBorder();
@@ -335,16 +326,8 @@ export class Simulation {
     this.frame = 0;
   }
 
-  addBorder(): void {
-    for (let x = 0; x < this.w; x++) {
-      this.setCell(x, 0, El.Wall, { force: true });
-      this.setCell(x, this.h - 1, El.Wall, { force: true });
-    }
-    for (let y = 0; y < this.h; y++) {
-      this.setCell(0, y, El.Wall, { force: true });
-      this.setCell(this.w - 1, y, El.Wall, { force: true });
-    }
-  }
+  /** The rim is the coordinate border. Nothing is painted there. */
+  addBorder(): void {}
 
   wakeAll(): void {
     this.chunkTtl.fill(4);
@@ -363,6 +346,14 @@ export class Simulation {
     }
   }
 
+  /** Keep boiling water redrawing so the bubbles keep rising. */
+  private markBoiling(): void {
+    const { type, temp, w } = this;
+    for (let i = 0; i < type.length; i++) {
+      if (type[i] === El.Water && temp[i] >= 88) this.markVisual(i % w, (i / w) | 0);
+    }
+  }
+
   markVisual(x: number, y: number): void {
     const cx = x >> 3;
     const cy = y >> 3;
@@ -378,8 +369,8 @@ export class Simulation {
     stepElectricity(this);
     stepReactions(this);
     stepHeat(this);
+    this.markBoiling();
     stepMovement(this);
-    stepPhysics(this);
     if (this.flash > 0) this.flash--;
     this.reinforce();
     for (let i = 0; i < this.chunkTtl.length; i++) {
@@ -454,12 +445,6 @@ export class Simulation {
   }
 }
 
-const PRESETS: Record<BodyKind, { hw: number; hh: number; health: number }> = {
-  box: { hw: 2.5, hh: 2.5, health: 90 },
-  ball: { hw: 2.15, hh: 2.15, health: 70 },
-  plank: { hw: 6.5, hh: 0.75, health: 60 },
-};
-
 function clampByte(n: number): number {
   const v = n | 0;
   if (v < -4) return -4;
@@ -484,10 +469,6 @@ export function touches(sim: Simulation, x: number, y: number, el: number): bool
   return false;
 }
 
-function bodiesOverlap(a: Body, b: Body): boolean {
-  return Math.abs(a.x - b.x) < a.hw + b.hw - 0.05 && Math.abs(a.y - b.y) < a.hh + b.hh - 0.05;
-}
-
 export function assertHealthy(sim: Simulation): void {
   let tally = 0;
   for (let i = 0; i < sim.type.length; i++) {
@@ -504,8 +485,4 @@ export function assertHealthy(sim: Simulation): void {
     sum += sim.counts[i];
   }
   if (sum !== sim.type.length) throw new Error(`count drift ${sum}`);
-  for (const b of sim.bodies) {
-    const blob = b.x + b.y + b.vx + b.vy + b.angle + b.av + b.health;
-    if (!Number.isFinite(blob)) throw new Error(`bad body ${b.id}`);
-  }
 }

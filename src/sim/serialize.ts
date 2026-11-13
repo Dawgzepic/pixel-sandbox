@@ -1,5 +1,5 @@
 import { El, RETIRED } from './elements';
-import type { Body, BodyKind, Simulation } from './simulation';
+import type { Simulation } from './simulation';
 import { AMBIENT } from './tuning';
 
 const MAGIC = [0x50, 0x58, 0x53, 0x42]; // PXSB
@@ -7,12 +7,10 @@ const VERSION = 1;
 const HEADER = 20;
 const BODY_BYTES = 48;
 
-const KINDS: BodyKind[] = ['box', 'ball', 'plank'];
-
-/** Binary world snapshot: grid, temperatures, and rigid bodies. */
+/** Binary world snapshot. Older files may still carry unused rigid-body bytes. */
 export function encodeWorld(sim: Simulation): Uint8Array {
   const n = sim.w * sim.h;
-  const bytes = new Uint8Array(HEADER + n * 6 + 2 + sim.bodies.length * BODY_BYTES + 4);
+  const bytes = new Uint8Array(HEADER + n * 6 + 2 + 4);
   const view = new DataView(bytes.buffer);
   bytes[0] = MAGIC[0];
   bytes[1] = MAGIC[1];
@@ -39,26 +37,8 @@ export function encodeWorld(sim: Simulation): Uint8Array {
   o += n;
   bytes.set(sim.variation, o);
   o += n;
-  view.setUint16(o, sim.bodies.length, true);
+  view.setUint16(o, 0, true);
   o += 2;
-  for (const b of sim.bodies) {
-    const kind = KINDS.indexOf(b.kind);
-    bytes[o] = kind < 0 ? 0 : kind;
-    bytes[o + 1] = b.asleep ? 1 : 0;
-    view.setUint16(o + 2, 0, true);
-    view.setFloat32(o + 4, b.x, true);
-    view.setFloat32(o + 8, b.y, true);
-    view.setFloat32(o + 12, b.vx, true);
-    view.setFloat32(o + 16, b.vy, true);
-    view.setFloat32(o + 20, b.angle, true);
-    view.setFloat32(o + 24, b.av, true);
-    view.setFloat32(o + 28, b.hw, true);
-    view.setFloat32(o + 32, b.hh, true);
-    view.setFloat32(o + 36, b.health, true);
-    view.setFloat32(o + 40, b.maxHealth, true);
-    view.setUint32(o + 44, b.id, true);
-    o += BODY_BYTES;
-  }
   let sum = 0;
   for (let i = 0; i < o; i++) sum = (sum + bytes[i]) >>> 0;
   view.setUint32(o, sum, true);
@@ -111,34 +91,7 @@ export function decodeWorld(sim: Simulation, data: Uint8Array | ArrayBuffer): vo
   const bodyCount = view.getUint16(o, true);
   o += 2;
   if (bytes.length !== expect + bodyCount * BODY_BYTES + 4) throw new Error('This save is the wrong length.');
-  const bodies: Body[] = [];
-  let maxId = 0;
-  for (let nBody = 0; nBody < bodyCount; nBody++) {
-    const kind = KINDS[bytes[o]] ?? 'box';
-    const body: Body = {
-      id: view.getUint32(o + 44, true),
-      kind,
-      x: view.getFloat32(o + 4, true),
-      y: view.getFloat32(o + 8, true),
-      vx: view.getFloat32(o + 12, true),
-      vy: view.getFloat32(o + 16, true),
-      angle: view.getFloat32(o + 20, true),
-      av: view.getFloat32(o + 24, true),
-      hw: view.getFloat32(o + 28, true),
-      hh: view.getFloat32(o + 32, true),
-      health: view.getFloat32(o + 36, true),
-      maxHealth: view.getFloat32(o + 40, true),
-      grounded: false,
-      asleep: bytes[o + 1] === 1,
-      sleep: bytes[o + 1] === 1 ? 9 : 0,
-      hurt: '',
-    };
-    if (body.id > maxId) maxId = body.id;
-    bodies.push(body);
-    o += BODY_BYTES;
-  }
-  sim.bodies = bodies;
-  sim.nextBodyId = maxId + 1;
+  o += bodyCount * BODY_BYTES;
   sim.nextPortal = bytes[10] === 2 ? 2 : 1;
   sim.rng.state = view.getInt32(12, true);
   sim.frame = view.getUint32(16, true);

@@ -45,11 +45,12 @@ export const El = {
   Foam: 31,
   Glass: 32,
   MoltenGlass: 33,
+  Saltwater: 34,
 } as const;
 
 export type ElId = (typeof El)[keyof typeof El];
 
-export const ELEMENT_COUNT = 34;
+export const ELEMENT_COUNT = 35;
 
 export type ElementState = 'empty' | 'powder' | 'liquid' | 'gas' | 'solid' | 'fire' | 'foam';
 
@@ -179,14 +180,7 @@ export const DEFS: ElementDef[] = [
   retired(El.Void, 'Void'),
   retired(El.Clone, 'Clone'),
   retired(El.Portal, 'Portal'),
-  {
-    id: El.Wall, name: 'Wall', category: 'tool',
-    blurb: 'Indestructible barrier. The eraser can still remove it.',
-    color: [78, 58, 102], variance: 8, state: 'solid', density: 10,
-    movable: false, solid: true, displaceable: false, flammable: false,
-    acidResist: 0, heatConduct: 0.04, defaultTemp: 20, alwaysActive: false,
-    glow: 0, voidImmune: true, conductive: false,
-  },
+  retired(El.Wall, 'Wall'),
   {
     id: El.Smoke, name: 'Smoke', category: 'fire',
     blurb: 'Billows, drifts, and fades. Flames leave it behind.',
@@ -234,7 +228,7 @@ export const DEFS: ElementDef[] = [
   retired(El.Foam, 'Foam'),
   {
     id: El.Glass, name: 'Glass', formula: 'SiO2', category: 'solid',
-    blurb: 'A clear dish. Heat passes through it. Acid leaves it alone. Held fire melts it.',
+    blurb: 'A clear dish. Heat passes through it. Acid leaves it alone. Melting it takes a long hold.',
     color: [168, 214, 228], variance: 18, state: 'solid', density: 8,
     movable: false, solid: true, displaceable: false, flammable: false,
     acidResist: 0, heatConduct: 1, defaultTemp: 20, alwaysActive: false,
@@ -247,6 +241,14 @@ export const DEFS: ElementDef[] = [
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.4, defaultTemp: 1040, alwaysActive: true,
     glow: 1, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Saltwater, name: 'Saltwater', formula: 'NaCl', category: 'liquid',
+    blurb: 'Salt dissolved in water. Paler than fresh water.',
+    color: [186, 220, 242], variance: 8, state: 'liquid', density: 1,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.4, defaultTemp: 20, alwaysActive: true,
+    glow: 0, voidImmune: false, conductive: false,
   },
 ];
 
@@ -322,6 +324,7 @@ export const PAIR_RULES: PairRule[] = [
   { a: El.Water, b: El.Fire, aTo: El.Steam, bTo: El.Empty, aTemp: 110, bTemp: 20 },
   { a: El.Ice, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 140, bTemp: 280 },
   { a: El.Acid, b: El.Base, aTo: El.Salt, bTo: El.Water, aTemp: 68, bTemp: 84 },
+  { a: El.Salt, b: El.Water, aTo: El.Saltwater, bTo: El.Saltwater, aTemp: 22, bTemp: 22 },
 ];
 
 const pairMap = new Map<number, PairRule>();
@@ -353,7 +356,7 @@ export const PHASE_RULES: PhaseRule[] = [
   { from: El.Stone, to: El.Lava, op: '>', temp: 1100, setTemp: 960 },
   { from: El.Metal, to: El.Molten, op: '>', temp: 1000, setTemp: 1040 },
   { from: El.Molten, to: El.Metal, op: '<', temp: 520, setTemp: 480 },
-  { from: El.Glass, to: El.MoltenGlass, op: '>', temp: 1000, setTemp: 1040 },
+  { from: El.Glass, to: El.MoltenGlass, op: '>', temp: 1300, setTemp: 1320 },
   { from: El.MoltenGlass, to: El.Glass, op: '<', temp: 520, setTemp: 400 },
 ];
 
