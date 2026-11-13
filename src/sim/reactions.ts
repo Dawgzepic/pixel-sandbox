@@ -1,22 +1,18 @@
-import {
-  ACID_RESIST,
-  CHARGE,
-  El,
-  findPair,
-  FLAMMABLE,
-  HAS_PAIR,
-  RULES_FOR,
-  VOID_IMMUNE,
-} from './elements';
+import { ACID_RESIST, El, findPair, HAS_PAIR, RULES_FOR } from './elements';
 import type { Simulation } from './simulation';
-import { TUNING } from './tuning';
 
 const DX = [0, 0, -1, 1];
 const DY = [-1, 1, 0, 0];
 
-/** Chemical contact: pairs, burning, acid, void, and clone. Explosions flush after the scan. */
+/** Foam pixels placed this step, so one pour erupts instead of filling the map. */
+let foamBudget = 0;
+
+/**
+ * Contact chemistry: neutralization, quenching, ice, acid on metal,
+ * and peroxide breaking into gas or foam.
+ */
 export function stepReactions(sim: Simulation): void {
-  const boom: number[] = [];
+  foamBudget = 40;
   const { w, h, chunkCols, chunkRows, chunkTtl, type, reacted } = sim;
 
   for (let cy = 0; cy < chunkRows; cy++) {
@@ -33,83 +29,14 @@ export function stepReactions(sim: Simulation): void {
           const t = type[i];
           if (t === El.Empty) continue;
           if (HAS_PAIR[t] && tryPair(sim, x, y)) continue;
-          if (RULES_FOR[t].length && tryContact(sim, x, y, boom)) continue;
+          if (RULES_FOR[t].length && tryContact(sim, x, y)) continue;
           if (t === El.Acid) doAcid(sim, x, y);
-          else if (t === El.Void) doVoid(sim, x, y);
-          else if (t === El.Clone) doClone(sim, x, y);
+          else if (t === El.Peroxide) doPeroxide(sim, x, y);
+          else if (t === El.Oxygen) trapOxygen(sim, x, y);
         }
       }
     }
   }
-
-  const done = new Set<number>();
-  let n = 0;
-  while (n < boom.length && done.size < TUNING.maxExplosions) {
-    const i = boom[n++];
-    if (done.has(i)) continue;
-    done.add(i);
-    explode(sim, i % sim.w, (i / sim.w) | 0, boom, done);
-  }
-}
-
-/** Fire brush: flammables catch, gunpowder blows, oil whooshes. The cell is not overwritten. */
-export function torch(sim: Simulation, x: number, y: number): boolean {
-  const t = sim.get(x, y);
-  if (t === El.Oil) {
-    igniteOil(sim, x, y);
-    return true;
-  }
-  if (t === El.Gunpowder) {
-    explode(sim, x, y, [], new Set());
-    return true;
-  }
-  if (FLAMMABLE[t] || t === El.Bug) {
-    sim.setCell(x, y, El.Fire, { temp: 520, aux: TUNING.fireLife, origin: 'system' });
-    return true;
-  }
-  return false;
-}
-
-function igniteOil(sim: Simulation, x: number, y: number): void {
-  const pool = flood(sim, x, y, El.Oil, 48);
-  if (pool.length >= TUNING.oilBurst) {
-    const life = 28 + sim.rng.int(18);
-    for (const index of pool) {
-      const cx = index % sim.w;
-      const cy = (index / sim.w) | 0;
-      sim.setCell(cx, cy, El.Fire, { temp: 640, aux: life, aux2: 3, origin: 'system' });
-      const ox = Math.sign(cx - x) || sim.rng.int(3) - 1;
-      const oy = Math.sign(cy - y) || -1;
-      sim.addImpulse(cx, cy, ox * 2, oy * 2 - 1);
-    }
-    sim.flash = Math.max(sim.flash, 5);
-    sim.emit('explode', x, y);
-    return;
-  }
-  sim.setCell(x, y, El.Fire, { temp: 520, aux: TUNING.fireLife, origin: 'system' });
-}
-
-function flood(sim: Simulation, x: number, y: number, el: number, cap: number): number[] {
-  const start = sim.idx(x, y);
-  const out = [start];
-  const seen = new Set<number>([start]);
-  let head = 0;
-  while (head < out.length && out.length < cap) {
-    const i = out[head++];
-    const cx = i % sim.w;
-    const cy = (i / sim.w) | 0;
-    for (let k = 0; k < 4; k++) {
-      const nx = cx + DX[k];
-      const ny = cy + DY[k];
-      if (!sim.inBounds(nx, ny)) continue;
-      const j = sim.idx(nx, ny);
-      if (seen.has(j) || sim.type[j] !== el) continue;
-      seen.add(j);
-      out.push(j);
-      if (out.length >= cap) break;
-    }
-  }
-  return out;
 }
 
 function tryPair(sim: Simulation, x: number, y: number): boolean {
@@ -135,30 +62,25 @@ function tryPair(sim: Simulation, x: number, y: number): boolean {
     sim.setCell(nx, ny, otherTo, { temp: otherTemp, origin: 'system' });
     sim.reacted[sim.idx(x, y)] = 1;
     sim.reacted[sim.idx(nx, ny)] = 1;
+    if (selfTo === El.Salt || otherTo === El.Salt) sim.emit('splash', x, y);
     return true;
   }
   return false;
 }
 
-function tryContact(sim: Simulation, x: number, y: number, boom: number[]): boolean {
+function tryContact(sim: Simulation, x: number, y: number): boolean {
   const i = sim.idx(x, y);
   const t = sim.type[i];
   const rules = RULES_FOR[t];
   for (const rule of rules) {
-    if (!neighborMatches(sim, x, y, rule.neighbor)) continue;
+    if (!neighborIs(sim, x, y, rule.neighbor)) continue;
     sim.aux2[i]++;
     if (sim.aux2[i] >= rule.ticks) {
       sim.aux2[i] = 0;
-      if (t === El.Oil && (rule.neighbor === El.Fire || rule.neighbor === El.Lava || rule.neighbor === El.Molten)) {
-        igniteOil(sim, x, y);
-      } else if (rule.explode) {
-        if (boom.length < TUNING.maxExplosions * 2) boom.push(i);
-      } else {
-        sim.setCell(x, y, rule.become, {
-          temp: rule.setTemp,
-          origin: 'system',
-        });
-      }
+      sim.setCell(x, y, rule.become, {
+        temp: rule.setTemp,
+        origin: 'system',
+      });
     }
     return true;
   }
@@ -166,19 +88,17 @@ function tryContact(sim: Simulation, x: number, y: number, boom: number[]): bool
   return false;
 }
 
-function neighborMatches(sim: Simulation, x: number, y: number, neighbor: number): boolean {
+function neighborIs(sim: Simulation, x: number, y: number, neighbor: number): boolean {
   for (let k = 0; k < 4; k++) {
     const nx = x + DX[k];
     const ny = y + DY[k];
     if (!sim.inBounds(nx, ny)) continue;
-    const j = sim.idx(nx, ny);
-    if (neighbor === CHARGE) {
-      if (sim.charge[j] > 0 || sim.type[j] === El.Battery) return true;
-    } else if (sim.type[j] === neighbor) return true;
+    if (sim.type[sim.idx(nx, ny)] === neighbor) return true;
   }
   return false;
 }
 
+/** Acid eats metal and leaves hydrogen. Stone, walls, and the other reagents stay. */
 function doAcid(sim: Simulation, x: number, y: number): void {
   const i = sim.idx(x, y);
   let tx = -1;
@@ -189,8 +109,8 @@ function doAcid(sim: Simulation, x: number, y: number): void {
     const ny = y + DY[k];
     if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
     const nt = sim.type[sim.idx(nx, ny)];
+    if (nt !== El.Metal) continue;
     const r = ACID_RESIST[nt];
-    // Eat the softest neighbor so acid clears sand before it chews the box.
     if (r > 0 && (tx < 0 || r < resist)) {
       tx = nx;
       ty = ny;
@@ -204,128 +124,182 @@ function doAcid(sim: Simulation, x: number, y: number): void {
   sim.aux[i]++;
   if (sim.aux[i] < resist) return;
   sim.aux[i] = 0;
-  sim.setCell(tx, ty, El.Empty, { origin: 'system' });
+  sim.setCell(tx, ty, El.Hydrogen, { temp: 32, aux: 48, origin: 'system' });
+  sim.setTemp(x, y, Math.min(72, sim.getTemp(x, y) + 14));
+  sim.emit('splash', tx, ty);
 }
 
-function doVoid(sim: Simulation, x: number, y: number): void {
-  // Prefer eating whatever is falling in from above, then the sides.
-  const order = [1, 2, 3, 0];
-  for (const k of order) {
-    const nx = x + DX[k];
-    const ny = y + DY[k];
-    if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
-    const nt = sim.type[sim.idx(nx, ny)];
-    if (nt === El.Empty || VOID_IMMUNE[nt]) continue;
-    sim.setCell(nx, ny, El.Empty, { origin: 'system' });
-    return;
+/**
+ * Peroxide slowly becomes water and oxygen.
+ * A crystal of iodide wakes the whole connected pool, which then goes much faster.
+ * Soap on or beside that liquid traps the gas as a foam column.
+ */
+function doPeroxide(sim: Simulation, x: number, y: number): void {
+  const i = sim.idx(x, y);
+  if (sim.aux2[i] === 0 && (neighborIs(sim, x, y, El.Iodide) || neighborCatalyzed(sim, x, y))) {
+    catalyzePool(sim, x, y);
   }
+  const fast = sim.aux2[i] > 0;
+  const chance = fast ? 0.72 : 0.02;
+  if (sim.rng.next() > chance) return;
+  const soapy = soapyAt(sim, x, y);
+  sim.setCell(x, y, El.Water, { temp: fast ? 36 : 24, origin: 'system' });
+  sim.reacted[sim.idx(x, y)] = 1;
+  vent(sim, x, y, fast, soapy);
 }
 
-const COPY_BLOCK = new Set<number>([El.Empty, El.Wall, El.Void, El.Clone, El.Portal]);
-
-function doClone(sim: Simulation, x: number, y: number): void {
+function neighborCatalyzed(sim: Simulation, x: number, y: number): boolean {
   for (let k = 0; k < 4; k++) {
     const nx = x + DX[k];
     const ny = y + DY[k];
-    const ox = x - DX[k];
-    const oy = y - DY[k];
-    if (!sim.inBounds(nx, ny) || !sim.inBounds(ox, oy)) continue;
-    if (sim.isBorder(ox, oy)) continue;
-    const nt = sim.type[sim.idx(nx, ny)];
-    if (COPY_BLOCK.has(nt)) continue;
-    if (sim.type[sim.idx(ox, oy)] !== El.Empty) continue;
-    const src = sim.idx(nx, ny);
-    sim.setCell(ox, oy, nt, {
-      temp: sim.temp[src],
-      variation: sim.variation[src],
-      origin: 'system',
-    });
-    sim.visited[sim.idx(ox, oy)] = 1;
-    return;
+    if (!sim.inBounds(nx, ny)) continue;
+    const j = sim.idx(nx, ny);
+    if (sim.type[j] === El.Peroxide && sim.aux2[j] > 0) return true;
   }
+  return false;
 }
 
-function explode(sim: Simulation, x: number, y: number, boom: number[], done: Set<number>): void {
-  sim.flash = Math.max(sim.flash, 6);
-  sim.emit('explode', x, y);
-  const r = TUNING.explodeRadius;
-  for (let dy = -r; dy <= r; dy++) {
-    for (let dx = -r; dx <= r; dx++) {
-      const d2 = dx * dx + dy * dy;
-      if (d2 > r * r) continue;
-      const nx = x + dx;
-      const ny = y + dy;
-      if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
-      const t = sim.get(nx, ny);
-      if (t === El.Wall || t === El.Void) continue;
-      const kickX = Math.sign(dx) * Math.max(1, 4 - (Math.sqrt(d2) | 0));
-      const kickY = Math.sign(dy || -1) * Math.max(1, 3 - (Math.sqrt(d2) | 0)) - 1;
-      if (t === El.Gunpowder && d2 > 0) {
-        const j = sim.idx(nx, ny);
-        if (!done.has(j) && boom.length < TUNING.maxExplosions * 3) boom.push(j);
-      }
-      if (t === El.Water && d2 <= 10) {
-        sim.setCell(nx, ny, El.Steam, { temp: 150, origin: 'system' });
-        sim.addImpulse(nx, ny, kickX, kickY);
-        sim.visited[sim.idx(nx, ny)] = 1;
-        continue;
-      }
-      if (t === El.Stone || t === El.Metal || t === El.Ice || t === El.Battery || t === El.Bulb || t === El.Portal || t === El.Clone) {
-        sim.setTemp(nx, ny, Math.min(900, sim.getTemp(nx, ny) + (d2 < 8 ? 220 : 80)));
-        continue;
-      }
-      const weak = t === El.Wood || t === El.Plant || t === El.Seed || t === El.Bug;
-      if (weak && d2 <= 10) {
-        sim.setCell(nx, ny, El.Fire, { temp: 600, aux: 20 + sim.rng.int(20), aux2: 3, origin: 'system' });
-        sim.addImpulse(nx, ny, kickX, kickY);
-        sim.visited[sim.idx(nx, ny)] = 1;
-        continue;
-      }
-      if (t === El.Empty && d2 > 8) {
-        if (d2 <= r * r && sim.rng.next() < 0.45) {
-          sim.setCell(nx, ny, El.Smoke, { temp: 80, aux: 14 + sim.rng.int(20), origin: 'system' });
-          sim.addImpulse(nx, ny, kickX, Math.min(-1, kickY));
-          sim.visited[sim.idx(nx, ny)] = 1;
-        }
-        continue;
-      }
-      if (t === El.Acid) continue;
-      if (t === El.Empty || FLAMMABLE[t] || t === El.Fire || t === El.Sand || t === El.Gunpowder || t === El.Smoke) {
-        const life = Math.max(16, 36 - d2 + sim.rng.int(12));
-        sim.setCell(nx, ny, d2 > 6 ? El.Smoke : El.Fire, {
-          temp: d2 > 6 ? 90 : 620,
-          aux: d2 > 6 ? 12 + sim.rng.int(16) : life,
-          aux2: d2 > 6 ? 0 : 3,
-          origin: 'system',
-        });
-        sim.addImpulse(nx, ny, kickX, kickY);
-        sim.visited[sim.idx(nx, ny)] = 1;
-      } else if (MOVABLE_BLAST(t)) {
-        sim.addImpulse(nx, ny, kickX, kickY);
-      }
+/** Mark every peroxide cell connected to this one, so one crystal sets off the cup. */
+function catalyzePool(sim: Simulation, x: number, y: number): void {
+  const stack: Array<[number, number]> = [[x, y]];
+  const seen = new Set<number>([sim.idx(x, y)]);
+  let n = 0;
+  while (stack.length > 0 && n < 120) {
+    const [cx, cy] = stack.pop()!;
+    const i = sim.idx(cx, cy);
+    if (sim.type[i] !== El.Peroxide) continue;
+    sim.aux2[i] = 12;
+    sim.wake(cx, cy);
+    n++;
+    for (let k = 0; k < 4; k++) {
+      const nx = cx + DX[k];
+      const ny = cy + DY[k];
+      if (!sim.inBounds(nx, ny)) continue;
+      const j = sim.idx(nx, ny);
+      if (seen.has(j) || sim.type[j] !== El.Peroxide) continue;
+      seen.add(j);
+      stack.push([nx, ny]);
     }
   }
-  for (const b of sim.bodies) {
-    const dx = b.x - (x + 0.5);
-    const dy = b.y - (y + 0.5);
-    const dist = Math.hypot(dx, dy);
-    const reach = r + 3;
-    if (dist >= reach) continue;
-    const force = (1 - dist / reach) * 4.2;
-    const inv = dist < 0.001 ? 0 : 1 / dist;
-    b.vx = clamp(b.vx + dx * inv * force, -2.4, 2.4);
-    b.vy = clamp(b.vy + dy * inv * force - force * 0.35, -2.6, 1.4);
-    b.av = clamp(b.av + (dx * inv) * 0.15, -0.4, 0.4);
-    b.health -= force * 22;
-    b.asleep = false;
-    b.hurt = 'fire';
+}
+
+function soapyAt(sim: Simulation, x: number, y: number): boolean {
+  if (neighborIs(sim, x, y, El.Soap) || neighborIs(sim, x, y, El.Foam)) return true;
+  for (let k = 0; k < 4; k++) {
+    const nx = x + DX[k];
+    const ny = y + DY[k];
+    if (!sim.inBounds(nx, ny)) continue;
+    if (neighborIs(sim, nx, ny, El.Soap)) return true;
   }
+  return false;
 }
 
-function MOVABLE_BLAST(t: number): boolean {
-  return t === El.Sand || t === El.Water || t === El.Oil || t === El.Steam || t === El.Smoke || t === El.Fire;
+/** Oxygen that drifts into soap afterward is caught and piled on. It was already counted at birth. */
+function trapOxygen(sim: Simulation, x: number, y: number): void {
+  if (!neighborIs(sim, x, y, El.Soap) && !neighborIs(sim, x, y, El.Foam)) return;
+  const fast = sim.aux2[sim.idx(x, y)] === 2;
+  sim.setCell(x, y, El.Foam, { temp: 28, aux: fast ? 200 : 80, origin: 'system' });
+  sim.reacted[sim.idx(x, y)] = 1;
+  if (fast) erupt(sim, x, y - 1, 4);
 }
 
-function clamp(n: number, lo: number, hi: number): number {
-  return n < lo ? lo : n > hi ? hi : n;
+/**
+ * Send the new gas to the surface of the liquid.
+ * Soap turns it into foam on the way up. Without soap it stays a free gas.
+ */
+function vent(sim: Simulation, x: number, y: number, fast: boolean, soapy: boolean): void {
+  let cx = x;
+  let cy = y;
+  for (let n = 0; n < 28; n++) {
+    const up = cy - 1;
+    if (!sim.inBounds(cx, up) || sim.isBorder(cx, up)) break;
+    const t = sim.get(cx, up);
+    if (t === El.Soap || t === El.Foam) soapy = true;
+    if (t === El.Empty || t === El.Oxygen || t === El.Hydrogen || t === El.Steam || t === El.Smoke) {
+      if (soapy) releaseFoam(sim, cx, up, fast);
+      else placeGas(sim, cx, up, fast);
+      return;
+    }
+    if (
+      t === El.Peroxide || t === El.Water || t === El.Acid || t === El.Base || t === El.Foam || t === El.Soap
+    ) {
+      cy = up;
+      continue;
+    }
+    const dir = sim.rng.next() < 0.5 ? -1 : 1;
+    if (sim.inBounds(cx + dir, cy) && !sim.isBorder(cx + dir, cy) && sim.get(cx + dir, cy) === El.Empty) {
+      cx += dir;
+      continue;
+    }
+    break;
+  }
+  const spot = sim.findEmptyNeighbor(x, y);
+  if (!spot) return;
+  if (soapy) releaseFoam(sim, spot.x, spot.y, fast);
+  else placeGas(sim, spot.x, spot.y, fast);
+}
+
+function releaseFoam(sim: Simulation, x: number, y: number, fast: boolean): void {
+  const placed = erupt(sim, x, y, fast ? 6 : 1);
+  if (placed <= 0) return;
+  if (fast) sim.gasFast++;
+  else sim.gasSlow++;
+}
+
+function placeGas(sim: Simulation, x: number, y: number, fast: boolean): void {
+  sim.setCell(x, y, El.Oxygen, { temp: 30, aux: 42, aux2: fast ? 2 : 1, origin: 'system' });
+  sim.reacted[sim.idx(x, y)] = 1;
+  if (fast) sim.gasFast++;
+  else sim.gasSlow++;
+}
+
+/** Stack foam upward from this cell so the column climbs instead of sinking. */
+function erupt(sim: Simulation, x: number, y: number, count: number): number {
+  let cx = x;
+  let cy = y;
+  let placed = 0;
+  let guard = 0;
+  while (placed < count && foamBudget > 0 && guard < 48) {
+    guard++;
+    if (!sim.inBounds(cx, cy) || sim.isBorder(cx, cy)) break;
+    const top = climbFoam(sim, cx, cy);
+    cx = top.x;
+    cy = top.y;
+    const up = cy - 1;
+    const spot = foamSpot(sim, cx, up) ?? (placed === 0 ? foamSpot(sim, cx, cy) : null);
+    if (!spot) break;
+    sim.setCell(spot.x, spot.y, El.Foam, { temp: 28, aux: 200, origin: 'system' });
+    sim.reacted[sim.idx(spot.x, spot.y)] = 1;
+    foamBudget--;
+    placed++;
+    cx = spot.x;
+    cy = spot.y;
+    if (placed % 3 === 0) cx += sim.rng.next() < 0.5 ? -1 : 1;
+  }
+  if (placed > 1) sim.emit('splash', x, y);
+  return placed;
+}
+
+function climbFoam(sim: Simulation, x: number, y: number): { x: number; y: number } {
+  let cx = x;
+  let cy = y;
+  for (let n = 0; n < 80; n++) {
+    const up = cy - 1;
+    if (!sim.inBounds(cx, up) || sim.isBorder(cx, up)) break;
+    if (sim.get(cx, up) !== El.Foam) break;
+    cy = up;
+  }
+  return { x: cx, y: cy };
+}
+
+function foamSpot(sim: Simulation, x: number, y: number): { x: number; y: number } | null {
+  const options = [x, x - 1, x + 1];
+  for (const cx of options) {
+    if (!sim.inBounds(cx, y) || sim.isBorder(cx, y)) continue;
+    const t = sim.get(cx, y);
+    if (t === El.Empty || t === El.Oxygen || t === El.Hydrogen || t === El.Steam || t === El.Smoke) {
+      return { x: cx, y };
+    }
+  }
+  return null;
 }

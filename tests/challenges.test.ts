@@ -1,105 +1,81 @@
 import { describe, expect, it } from 'vitest';
 import { El } from '../src/sim/elements';
 import { Simulation } from '../src/sim/simulation';
-import { challengeList, startChallenge } from '../src/sim/challenges';
+import { challengeList, foamReach, startChallenge } from '../src/sim/challenges';
 
 function fresh(): Simulation {
   return new Simulation(36, 48, 8);
 }
 
-describe('challenges', () => {
-  it('lists five goals that are not already won', () => {
-    expect(challengeList()).toHaveLength(5);
-    for (const info of challengeList()) {
-      const world = fresh();
-      const challenge = startChallenge(world, info.id);
-      world.step();
-      expect(challenge.won(world)).toBe(false);
-    }
-  });
+const SPOILERS = [
+  'peroxide', 'iodide', 'soap', 'h2o2', 'hcl', 'naoh', 'ki',
+  'catalyst', 'hydrochloric', 'sodium', 'potassium', 'recipe',
+];
 
-  it('accepts water on the campfire and rejects erasing it', () => {
+describe('challenges', () => {
+  it('lists one foam goal and does not name the ingredients', () => {
+    const list = challengeList();
+    expect(list).toHaveLength(1);
+    expect(list[0].id).toBe('giant-foam');
+    expect(list[0].name).toBe('Giant Foam');
+    expect(list[0].steps).toHaveLength(3);
+    const blob = `${list[0].name} ${list[0].goal} ${list[0].steps.join(' ')}`.toLowerCase();
+    for (const word of SPOILERS) expect(blob).not.toContain(word);
     const world = fresh();
-    const challenge = startChallenge(world, 'put-out-fire');
-    const fires: Array<[number, number]> = [];
-    for (let y = 1; y < world.h - 1; y++) {
-      for (let x = 1; x < world.w - 1; x++) if (world.get(x, y) === El.Fire) fires.push([x, y]);
-    }
-    expect(fires.length).toBeGreaterThan(0);
-    for (const [x, y] of fires) world.eraseAt(x, y);
+    const challenge = startChallenge(world, 'giant-foam');
     world.step();
     expect(challenge.won(world)).toBe(false);
-
-    const again = fresh();
-    const real = startChallenge(again, 'put-out-fire');
-    const spots: Array<[number, number]> = [];
-    for (let y = 1; y < again.h - 1; y++) {
-      for (let x = 1; x < again.w - 1; x++) if (again.get(x, y) === El.Fire || again.get(x, y) === El.Wood) {
-        spots.push([x, y]);
-      }
-    }
-    for (const [x, y] of spots) again.paintUser(x, y, El.Water);
-    for (let i = 0; i < 8; i++) again.step();
-    expect(real.won(again)).toBe(true);
+    expect(challenge.sample(world).steps).toEqual([false, false, false]);
   });
 
-  it('grows a watered seed to the top', () => {
+  it('latches checkpoints from the simulation, not from a click script', () => {
     const world = fresh();
-    const challenge = startChallenge(world, 'grow-plant');
-    for (let i = 0; i < 500; i++) {
+    const challenge = startChallenge(world, 'giant-foam');
+    const y = 20;
+    for (let x = 8; x <= 16; x++) world.setCell(x, y, El.Stone);
+    for (let x = 9; x <= 15; x++) {
+      for (let dy = 1; dy <= 4; dy++) world.setCell(x, y - dy, El.Peroxide);
+    }
+    for (let i = 0; i < 30; i++) {
       world.step();
-      if (challenge.won(world)) break;
+      challenge.sample(world);
     }
-    expect(challenge.won(world)).toBe(true);
-  });
+    expect(challenge.sample(world).steps[0]).toBe(true);
+    expect(challenge.sample(world).steps[1]).toBe(false);
+    expect(challenge.won(world)).toBe(false);
 
-  it('makes stone when water is painted onto lava', () => {
-    const world = fresh();
-    const challenge = startChallenge(world, 'make-stone');
-    const lava: Array<[number, number]> = [];
-    for (let y = 1; y < world.h - 1; y++) {
-      for (let x = 1; x < world.w - 1; x++) if (world.get(x, y) === El.Lava) lava.push([x, y]);
+    const fast = fresh();
+    const rush = startChallenge(fast, 'giant-foam');
+    for (let x = 8; x <= 16; x++) fast.setCell(x, y, El.Stone);
+    for (let x = 9; x <= 15; x++) {
+      for (let dy = 1; dy <= 4; dy++) fast.setCell(x, y - dy, El.Peroxide);
     }
-    for (let i = 0; i < 8; i++) world.paintUser(lava[i][0], lava[i][1], El.Water);
-    expect(challenge.won(world)).toBe(true);
-  });
+    fast.setCell(12, y - 2, El.Iodide);
+    for (let i = 0; i < 12; i++) {
+      fast.step();
+      rush.sample(fast);
+    }
+    const mid = rush.sample(fast);
+    expect(mid.steps[0]).toBe(true);
+    expect(mid.steps[1]).toBe(true);
+    expect(mid.won).toBe(false);
+    expect(fast.count(El.Foam)).toBe(0);
 
-  it('powers the bulb once metal joins the gap', () => {
-    const world = fresh();
-    const challenge = startChallenge(world, 'power-bulb');
-    let bx = 0;
-    let by = 0;
-    let ux = 0;
-    let uy = 0;
-    for (let y = 1; y < world.h - 1; y++) {
-      for (let x = 1; x < world.w - 1; x++) {
-        if (world.get(x, y) === El.Battery) {
-          bx = x;
-          by = y;
-        }
-        if (world.get(x, y) === El.Bulb) {
-          ux = x;
-          uy = y;
-        }
-      }
+    const foamy = fresh();
+    const climb = startChallenge(foamy, 'giant-foam');
+    for (let x = 8; x <= 16; x++) foamy.setCell(x, y, El.Stone);
+    for (let x = 9; x <= 15; x++) {
+      for (let dy = 1; dy <= 4; dy++) foamy.setCell(x, y - dy, El.Peroxide);
     }
-    expect(uy).toBe(by);
-    for (let x = bx + 1; x < ux; x++) world.paintUser(x, by, El.Metal);
-    world.step();
-    expect(challenge.won(world)).toBe(true);
-  });
-
-  it('clears a sand box when acid is poured in', () => {
-    const world = fresh();
-    const challenge = startChallenge(world, 'clear-box');
-    const sand: Array<[number, number]> = [];
-    for (let y = 1; y < world.h - 1; y++) {
-      for (let x = 1; x < world.w - 1; x++) if (world.get(x, y) === El.Sand) sand.push([x, y]);
+    foamy.setCell(12, y - 2, El.Iodide);
+    for (let x = 9; x <= 15; x++) foamy.setCell(x, y - 5, El.Soap);
+    for (let i = 0; i < 20; i++) {
+      foamy.step();
+      climb.sample(foamy);
     }
-    expect(sand.length).toBeGreaterThan(4);
-    // Pour a pocket of acid into the pile and let it eat.
-    for (let i = 0; i < Math.min(6, sand.length); i++) world.paintUser(sand[i][0], sand[i][1], El.Acid);
-    for (let i = 0; i < 240; i++) world.step();
-    expect(challenge.won(world)).toBe(true);
+    expect(foamReach(foamy)).toBeGreaterThanOrEqual(14);
+    expect(foamy.count(El.Foam)).toBeGreaterThanOrEqual(24);
+    expect(climb.won(foamy)).toBe(true);
+    expect(climb.sample(foamy).steps).toEqual([true, true, true]);
   });
 });

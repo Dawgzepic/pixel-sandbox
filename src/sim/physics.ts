@@ -445,21 +445,17 @@ function damageAll(sim: Simulation): void {
     const y1 = Math.min(sim.h - 2, Math.floor(box.b + 0.5));
     let acid = 0;
     let fire = 0;
-    let voidD = 0;
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         if (!nearBody(b, x, y)) continue;
         const t = sim.get(x, y);
         if (t === El.Acid) acid++;
         else if (t === El.Fire || t === El.Lava || t === El.Molten) fire++;
-        else if (t === El.Void) voidD++;
       }
     }
-    if (acid === 0 && fire === 0 && voidD === 0) continue;
-    if (acid > 0) b.hurt = 'acid';
-    else if (fire > 0) b.hurt = 'fire';
-    else b.hurt = 'void';
-    b.health -= acid * 1.15 + fire * 1.05 + voidD * 2.2;
+    if (acid === 0 && fire === 0) continue;
+    b.hurt = acid > 0 ? 'acid' : 'fire';
+    b.health -= acid * 1.15 + fire * 1.05;
     b.asleep = false;
   }
 }
@@ -499,7 +495,7 @@ function sprinkle(sim: Simulation, b: Body, el: number): void {
     for (let x = x0; x <= x1; x++) {
       if (!cellInside(b, x, y)) continue;
       const t = sim.get(x, y);
-      if (t === El.Empty || t === El.Wood || t === El.Plant) {
+      if (t === El.Empty) {
         sim.setCell(x, y, el, { origin: 'system' });
       }
     }

@@ -1,4 +1,6 @@
+import { El, RETIRED } from './elements';
 import type { Body, BodyKind, Simulation } from './simulation';
+import { AMBIENT } from './tuning';
 
 const MAGIC = [0x50, 0x58, 0x53, 0x42]; // PXSB
 const VERSION = 1;
@@ -96,6 +98,16 @@ export function decodeWorld(sim: Simulation, data: Uint8Array | ArrayBuffer): vo
   o += n;
   sim.variation.set(bytes.subarray(o, o + n));
   o += n;
+  for (let i = 0; i < n; i++) {
+    const t = sim.type[i];
+    if (t >= RETIRED.length || RETIRED[t]) {
+      sim.type[i] = El.Empty;
+      sim.temp[i] = AMBIENT;
+      sim.aux[i] = 0;
+      sim.aux2[i] = 0;
+      sim.variation[i] = 0;
+    }
+  }
   const bodyCount = view.getUint16(o, true);
   o += 2;
   if (bytes.length !== expect + bodyCount * BODY_BYTES + 4) throw new Error('This save is the wrong length.');

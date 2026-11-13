@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { El } from '../src/sim/elements';
+import { El, elementByName } from '../src/sim/elements';
 
 const MATERIALS = [
-  'Sand', 'Water', 'Oil', 'Acid', 'Fire', 'Gunpowder', 'Wood', 'Seed', 'Plant', 'Bug',
-  'Metal', 'Battery', 'Bulb', 'Ice', 'Steam', 'Lava', 'Stone', 'Void', 'Clone', 'Portal', 'Wall',
+  'Water', 'Hydrochloric acid', 'Sodium hydroxide', 'Hydrogen peroxide', 'Potassium iodide', 'Soap',
+  'Fire', 'Smoke', 'Metal', 'Molten metal', 'Ice', 'Steam', 'Lava', 'Stone', 'Wall',
 ] as const;
 
 test.beforeEach(async ({ page }) => {
@@ -18,7 +18,14 @@ test('phone screen shows the sandbox, picker, temperature, and challenges', asyn
 
   await page.getByRole('button', { name: 'ALL', exact: true }).click();
   await expect(page.locator('.sheettitle')).toHaveText('ELEMENTS');
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Water (H2O)' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Hydrochloric acid (HCl)' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Hydrogen peroxide (H2O2)' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Potassium iodide (KI)' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Sodium hydroxide (NaOH)' })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Lava' })).toBeVisible();
+  await expect(page.getByText('Seed')).toHaveCount(0);
+  await expect(page.getByText('Plant')).toHaveCount(0);
   await page.screenshot({ path: '/opt/cursor/artifacts/pixel-sandbox-picker.png' });
   await page.getByRole('button', { name: 'CLOSE' }).click();
 
@@ -28,8 +35,11 @@ test('phone screen shows the sandbox, picker, temperature, and challenges', asyn
   await page.getByRole('button', { name: 'HEAT' }).click();
 
   await page.getByRole('button', { name: 'GOALS' }).click();
-  await expect(page.getByText('Put out the fire')).toBeVisible();
-  await expect(page.getByText('Power the bulb')).toBeVisible();
+  const goals = page.locator('.sheet');
+  await expect(goals.getByText('Giant Foam')).toBeVisible();
+  await expect(goals.getByText('A gas is coming off a liquid.')).toBeVisible();
+  await expect(goals.getByText('Put out the fire')).toHaveCount(0);
+  await expect(goals.getByText(/peroxide|iodide|soap|H2O2|catalyst/i)).toHaveCount(0);
   await page.screenshot({ path: '/opt/cursor/artifacts/pixel-sandbox-challenges.png' });
 });
 
@@ -42,7 +52,7 @@ test('paints every element by touch and runs a water-lava reaction', async ({ pa
   });
 
   for (const name of MATERIALS) {
-    const id = El[name];
+    const id = elementByName(name)!.id;
     await page.evaluate((tool) => {
       const api = window.__PIXEL_SANDBOX__!;
       api.clear();

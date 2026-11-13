@@ -5,14 +5,14 @@ import {
   El,
   ELEMENT_COUNT,
   findPair,
+  RETIRED,
 } from './elements';
 import { Rng } from './rng';
 import { stepElectricity } from './electricity';
 import { stepHeat } from './heat';
-import { stepLife } from './life';
 import { stepMovement } from './movement';
 import { overlapsSolid, pointInBody, stepPhysics, type Body, type BodyKind } from './physics';
-import { stepReactions, torch } from './reactions';
+import { stepReactions } from './reactions';
 import { AMBIENT, CHUNK, TUNING } from './tuning';
 
 export type { Body, BodyKind };
@@ -80,7 +80,9 @@ export class Simulation {
   bodies: Body[] = [];
   nextBodyId = 1;
   events: SimEvent[] = [];
-  plantsWatered = false;
+  /** Oxygen let off slowly, and oxygen let off in a catalyzed rush. */
+  gasSlow = 0;
+  gasFast = 0;
   frame = 0;
   nextPortal = 1;
   rng: Rng;
@@ -156,6 +158,7 @@ export class Simulation {
     if (!this.inBounds(x, y)) return;
     if (this.isBorder(x, y) && !opts?.force) return;
     if (el < 0 || el >= ELEMENT_COUNT) return;
+    if (RETIRED[el]) return;
     const i = this.idx(x, y);
     const prev = this.type[i];
     const origin = opts?.origin ?? 'system';
@@ -171,11 +174,7 @@ export class Simulation {
     }
     this.type[i] = el;
     this.temp[i] = opts?.temp !== undefined ? clampTemp(opts.temp) : DEFAULT_TEMP[el];
-    let aux = opts?.aux ?? (el === El.Fire ? TUNING.fireLife : 0);
-    if (el === El.Portal && opts?.aux === undefined && prev !== El.Portal) {
-      aux = this.nextPortal;
-      this.nextPortal = this.nextPortal === 1 ? 2 : 1;
-    }
+    const aux = opts?.aux ?? (el === El.Fire ? TUNING.fireLife : 0);
     this.aux[i] = aux;
     this.aux2[i] = opts?.aux2 ?? 0;
     if (prev !== el) this.variation[i] = opts?.variation ?? this.rng.int(16);
@@ -187,7 +186,7 @@ export class Simulation {
   /** Brush entry. Pair reactions (water on lava, water on fire) resolve instead of overwriting. */
   paintUser(x: number, y: number, el: number, opts?: { aux?: number }): void {
     if (!this.inBounds(x, y) || this.isBorder(x, y)) return;
-    if (el < 0 || el >= ELEMENT_COUNT) return;
+    if (el < 0 || el >= ELEMENT_COUNT || RETIRED[el]) return;
     const prev = this.type[this.idx(x, y)];
     if (prev === El.Wall && el !== El.Empty) return;
     if (el === El.Fire && prev !== El.Empty && prev !== El.Fire) {
@@ -219,12 +218,9 @@ export class Simulation {
     this.setCell(x, y, el, { origin: 'user', aux: opts?.aux });
   }
 
-  /** Fire brush heats the cell. Flammables catch; stone and metal melt once they are hot enough. */
+  /** Fire brush heats the cell. It never replaces what is already there. */
   private scorch(x: number, y: number): void {
-    if (torch(this, x, y)) return;
     const i = this.idx(x, y);
-    const t = this.type[i];
-    if (t === El.Void) return;
     this.temp[i] = clampTemp(this.temp[i] + TUNING.fireBrush);
     this.wake(x, y);
   }
@@ -316,6 +312,8 @@ export class Simulation {
   resetScores(): void {
     this.generated.fill(0);
     this.userPaint.fill(0);
+    this.gasSlow = 0;
+    this.gasFast = 0;
   }
 
   recomputeCounts(): void {
@@ -340,7 +338,6 @@ export class Simulation {
     this.resetScores();
     this.wakeAll();
     this.frame = 0;
-    this.plantsWatered = false;
   }
 
   addBorder(): void {
@@ -386,7 +383,6 @@ export class Simulation {
     stepElectricity(this);
     stepReactions(this);
     stepHeat(this);
-    stepLife(this);
     stepMovement(this);
     stepPhysics(this);
     if (this.flash > 0) this.flash--;
@@ -401,20 +397,9 @@ export class Simulation {
     this.events.push({ kind, x, y });
   }
 
-  /** Keep sources, growing life, and off-temperature cells awake. */
+  /** Keep sources and off-temperature cells awake. */
   reinforce(): void {
     const { type, temp, w } = this;
-    let watered = false;
-    for (let i = 0; i < type.length; i++) {
-      if (type[i] !== El.Plant) continue;
-      const x = i % w;
-      const y = (i / w) | 0;
-      if (touches(this, x, y, El.Water)) {
-        watered = true;
-        break;
-      }
-    }
-    this.plantsWatered = watered;
     for (let i = 0; i < type.length; i++) {
       const t = type[i];
       if (t === El.Empty) {
@@ -426,7 +411,7 @@ export class Simulation {
         continue;
       }
       const hot = Math.abs(temp[i] - DEFAULT_TEMP[t]) > 8;
-      if (ALWAYS[t] || hot || (t === El.Plant && watered)) {
+      if (ALWAYS[t] || hot) {
         const x = i % w;
         const y = (i / w) | 0;
         this.wake(x, y);

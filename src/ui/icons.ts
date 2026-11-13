@@ -1,32 +1,24 @@
-import { DEFS, El, elementByName } from '../sim/elements';
+import { DEFS, El, elementByName, elementLabel } from '../sim/elements';
 
 export type ToolName =
   | 'Eraser'
   | 'Box'
   | 'Ball'
   | 'Plank'
-  | 'Sand'
   | 'Water'
-  | 'Oil'
-  | 'Acid'
+  | 'Hydrochloric acid'
+  | 'Sodium hydroxide'
+  | 'Hydrogen peroxide'
+  | 'Potassium iodide'
+  | 'Soap'
   | 'Fire'
   | 'Smoke'
-  | 'Gunpowder'
-  | 'Wood'
-  | 'Seed'
-  | 'Plant'
-  | 'Bug'
   | 'Metal'
-  | 'Molten'
-  | 'Battery'
-  | 'Bulb'
+  | 'Molten metal'
   | 'Ice'
   | 'Steam'
   | 'Lava'
   | 'Stone'
-  | 'Void'
-  | 'Clone'
-  | 'Portal'
   | 'Wall';
 
 const cache = new Map<string, HTMLCanvasElement>();
@@ -52,17 +44,17 @@ export function iconCanvas(name: string): HTMLCanvasElement {
 }
 
 function drawElement(ctx: CanvasRenderingContext2D, name: string): void {
-  const def = elementByName(name) ?? DEFS[El.Sand];
+  const def = elementByName(name) ?? DEFS[El.Water];
   const [r, g, b] = def.color;
   const fill = `rgb(${r}, ${g}, ${b})`;
   const dark = `rgb(${Math.max(0, r - 50)}, ${Math.max(0, g - 50)}, ${Math.max(0, b - 40)})`;
   ctx.fillStyle = fill;
-  if (def.state === 'liquid' || def.state === 'gas' || name === 'Lava') {
+  if (def.state === 'liquid' || def.state === 'gas' || def.state === 'foam' || name === 'Lava' || name === 'Molten metal') {
     ctx.fillRect(3, 8, 10, 4);
     ctx.fillRect(4, 6, 8, 2);
     ctx.fillStyle = dark;
     ctx.fillRect(3, 11, 10, 1);
-  } else if (def.state === 'powder' || name === 'Seed') {
+  } else if (def.state === 'powder') {
     for (const [x, y] of [[4, 9], [6, 8], [8, 9], [10, 8], [5, 11], [7, 10], [9, 11], [11, 10]]) {
       ctx.fillRect(x, y, 2, 2);
     }
@@ -78,48 +70,6 @@ function drawElement(ctx: CanvasRenderingContext2D, name: string): void {
     ctx.fillRect(6, 9, 4, 3);
     ctx.fillStyle = '#ffe38a';
     ctx.fillRect(7, 7, 2, 2);
-  } else if (name === 'Plant') {
-    ctx.fillStyle = '#6a4a28';
-    ctx.fillRect(7, 8, 2, 5);
-    ctx.fillStyle = fill;
-    ctx.fillRect(4, 4, 3, 3);
-    ctx.fillRect(9, 5, 3, 3);
-    ctx.fillRect(6, 7, 4, 3);
-  } else if (name === 'Bug') {
-    ctx.fillRect(5, 6, 6, 4);
-    ctx.fillRect(4, 7, 1, 2);
-    ctx.fillRect(11, 7, 1, 2);
-    ctx.fillStyle = '#1a1022';
-    ctx.fillRect(6, 7, 1, 1);
-    ctx.fillRect(9, 7, 1, 1);
-  } else if (name === 'Battery') {
-    ctx.fillStyle = '#d23a3a';
-    ctx.fillRect(6, 3, 4, 2);
-    ctx.fillStyle = fill;
-    ctx.fillRect(4, 5, 8, 7);
-    ctx.fillStyle = '#1a1022';
-    ctx.fillRect(6, 7, 4, 1);
-  } else if (name === 'Bulb') {
-    ctx.fillRect(5, 3, 6, 6);
-    ctx.fillStyle = '#6a5a3a';
-    ctx.fillRect(6, 9, 4, 3);
-    ctx.fillStyle = '#fff6b0';
-    ctx.fillRect(7, 5, 2, 2);
-  } else if (name === 'Portal') {
-    ctx.fillStyle = '#2ae0d6';
-    ctx.fillRect(3, 4, 4, 8);
-    ctx.fillStyle = '#ff4ac4';
-    ctx.fillRect(9, 4, 4, 8);
-  } else if (name === 'Void') {
-    ctx.fillStyle = '#08000e';
-    ctx.fillRect(4, 4, 8, 8);
-    ctx.strokeStyle = fill;
-    ctx.strokeRect(3.5, 3.5, 9, 9);
-  } else if (name === 'Clone') {
-    ctx.fillRect(3, 6, 4, 4);
-    ctx.globalAlpha = 0.7;
-    ctx.fillRect(8, 6, 4, 4);
-    ctx.globalAlpha = 1;
   } else {
     ctx.fillRect(4, 4, 8, 8);
     ctx.fillStyle = dark;
@@ -162,33 +112,52 @@ function drawPlank(ctx: CanvasRenderingContext2D): void {
 
 export interface PaletteItem {
   name: ToolName;
+  label: string;
   blurb: string;
 }
 
 export const GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
-  { label: 'Powders', items: [item('Sand'), item('Gunpowder')] },
-  { label: 'Liquids', items: [item('Water'), item('Oil'), item('Acid')] },
-  { label: 'Heat', items: [item('Fire'), item('Lava'), item('Smoke'), item('Ice'), item('Steam')] },
-  { label: 'Solids', items: [item('Wood'), item('Stone'), item('Metal'), item('Molten'), item('Wall')] },
-  { label: 'Life', items: [item('Seed'), item('Plant'), item('Bug')] },
-  { label: 'Power', items: [item('Battery'), item('Bulb')] },
-  { label: 'Magic', items: [item('Void'), item('Clone'), item('Portal')] },
+  {
+    label: 'Liquids',
+    items: [
+      item('Water'),
+      item('Hydrochloric acid'),
+      item('Sodium hydroxide'),
+      item('Hydrogen peroxide'),
+      item('Soap'),
+    ],
+  },
+  { label: 'Crystals', items: [item('Potassium iodide')] },
+  { label: 'Solids', items: [item('Stone'), item('Metal'), item('Ice'), item('Wall')] },
+  { label: 'Heat', items: [item('Fire'), item('Lava'), item('Molten metal'), item('Steam'), item('Smoke')] },
   {
     label: 'Objects',
     items: [
-      { name: 'Box', blurb: 'A wooden crate. Falls, stacks, burns, and dissolves.' },
-      { name: 'Ball', blurb: 'A wooden ball. Rolls, bumps, and splashes liquids aside.' },
-      { name: 'Plank', blurb: 'A wooden plank. Tumbles and can lie across a gap.' },
-      { name: 'Eraser', blurb: 'Removes elements and objects. Walls included.' },
+      { name: 'Box', label: 'Box', blurb: 'A wooden crate. Falls, stacks, burns, and breaks down in acid.' },
+      { name: 'Ball', label: 'Ball', blurb: 'A wooden ball. Rolls, bumps, and splashes liquids aside.' },
+      { name: 'Plank', label: 'Plank', blurb: 'A wooden plank. Tumbles and can lie across a gap.' },
+      { name: 'Eraser', label: 'Eraser', blurb: 'Removes elements and objects. Walls included.' },
     ],
   },
 ];
 
-export const QUICK: ToolName[] = ['Sand', 'Water', 'Oil', 'Acid', 'Fire', 'Lava', 'Wood', 'Stone', 'Metal', 'Seed', 'Eraser'];
+export const QUICK: ToolName[] = [
+  'Water',
+  'Hydrochloric acid',
+  'Sodium hydroxide',
+  'Hydrogen peroxide',
+  'Potassium iodide',
+  'Soap',
+  'Fire',
+  'Stone',
+  'Metal',
+  'Lava',
+  'Eraser',
+];
 
 function item(name: ToolName): PaletteItem {
   const def = elementByName(name);
-  return { name, blurb: def?.blurb ?? name };
+  return { name, label: def ? elementLabel(def) : name, blurb: def?.blurb ?? name };
 }
 
 export function findItem(name: string): PaletteItem | undefined {

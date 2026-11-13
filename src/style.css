@@ -158,11 +158,20 @@ button:disabled { opacity: 0.4; }
 }
 
 .banner {
-  gap: 8px;
-  padding: 0 8px 6px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px 8px 8px;
+  background: #140c18;
+  border-top: 2px solid #3a2040;
 }
 
-.bannertext { flex: 1; }
+.bannertext { flex: none; }
+
+.banneractions {
+  display: flex;
+  gap: 8px;
+}
 
 .dock {
   position: relative;
@@ -174,14 +183,15 @@ button:disabled { opacity: 0.4; }
 .quick { padding-top: 0; }
 
 .tool {
-  width: 52px;
-  min-width: 52px;
-  height: 58px;
+  width: 86px;
+  min-width: 86px;
+  height: auto;
+  min-height: 72px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   padding: 4px;
 }
 
@@ -191,16 +201,32 @@ button:disabled { opacity: 0.4; }
   image-rendering: pixelated;
 }
 
-.toolname {
+.toolname, .toolformula {
   font-size: 6px;
-  line-height: 1.2;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
 }
+
+.toolformula { color: var(--accent); }
+
+button.selected .toolformula { color: #2a1608; }
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.step { color: var(--muted); }
+
+.step.done { color: var(--accent); }
 
 .sheet {
   position: absolute;
   inset: 0;
   z-index: 4;
-  background: rgba(12, 6, 16, 0.96);
+  background: #0c0610;
   overflow: auto;
   padding: 12px;
   padding-bottom: calc(16px + env(safe-area-inset-bottom));

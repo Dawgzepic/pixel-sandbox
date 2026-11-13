@@ -78,8 +78,7 @@ export function mountGame(root: HTMLElement): SandboxApi {
     tempView: false,
     shape: 'circle' as BrushShape,
     size: 3,
-    tool: 'Sand' as ToolName,
-    portalColor: 1,
+    tool: 'Water' as ToolName,
     challenge: null as ChallengeRuntime | null,
     snapshot: null as Uint8Array | null,
     celebrated: false,
@@ -88,7 +87,6 @@ export function mountGame(root: HTMLElement): SandboxApi {
     pointers: new Map<number, PointerPoint>(),
     painting: false,
     lineAnchor: null as { x: number; y: number } | null,
-    portalStroked: false,
     lastCell: null as { x: number; y: number } | null,
     hand: false,
     spaceDown: false,
@@ -105,7 +103,7 @@ export function mountGame(root: HTMLElement): SandboxApi {
   };
 
   wireControls(state);
-  selectTool(state, 'Sand');
+  selectTool(state, 'Water');
   window.addEventListener('resize', () => resize(state));
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) state.acc = 0;
@@ -163,7 +161,7 @@ export function mountGame(root: HTMLElement): SandboxApi {
       syncPause(state);
       toast(state, error instanceof Error ? error.message : 'The simulation hit an error.');
     }
-    checkWin(state);
+    updateChallenge(state);
     const preview = previewCells(state);
     renderer.present(screen, state.view, state.dpr, preview, previewColor(state));
     requestAnimationFrame(frame);
@@ -409,7 +407,6 @@ type GameState = {
   spaceDown: boolean;
   gesture: Gesture | null;
   tool: ToolName;
-  portalColor: number;
   challenge: ChallengeRuntime | null;
   snapshot: Uint8Array | null;
   celebrated: boolean;
@@ -418,7 +415,6 @@ type GameState = {
   pointers: Map<number, PointerPoint>;
   painting: boolean;
   lineAnchor: { x: number; y: number } | null;
-  portalStroked: boolean;
   lastCell: { x: number; y: number } | null;
   zoom: number;
   panX: number;
@@ -435,11 +431,7 @@ function selectTool(state: GameState, name: string): void {
   const item = findItem(name);
   if (!item) return;
   state.tool = item.name;
-  if (item.name === 'Portal') {
-    state.ui.status.textContent = `Portal ${state.portalColor === 1 ? 'A' : 'B'} — ${item.blurb}`;
-  } else {
-    state.ui.status.textContent = `${item.name} — ${item.blurb}`;
-  }
+  state.ui.status.textContent = `${item.label} — ${item.blurb}`;
   for (const button of state.ui.quick.querySelectorAll('button')) {
     button.classList.toggle('selected', button.dataset.tool === item.name);
   }
@@ -633,14 +625,6 @@ function onPointerUp(state: GameState, event: PointerEvent): void {
   state.painting = false;
   state.lineAnchor = null;
   state.lastCell = null;
-  if (state.portalStroked) {
-    state.portalColor = state.portalColor === 1 ? 2 : 1;
-    state.portalStroked = false;
-    const item = findItem('Portal');
-    if (item && state.tool === 'Portal') {
-      state.ui.status.textContent = `Portal ${state.portalColor === 1 ? 'A' : 'B'} — ${item.blurb}`;
-    }
-  }
 }
 
 /** Keep heating the cells under a held fire brush, once per simulation step. */
@@ -669,28 +653,29 @@ function stamp(state: GameState, x: number, y: number): void {
     else {
       const id = elementByName(state.tool)?.id;
       if (id === undefined) continue;
-      const aux = state.tool === 'Portal' ? state.portalColor : undefined;
-      state.sim.paintUser(cx, cy, id, aux === undefined ? undefined : { aux });
+      state.sim.paintUser(cx, cy, id);
     }
     painted = true;
   }
   if (!painted) return;
-  if (state.tool === 'Portal') state.portalStroked = true;
-  const sound = state.tool === 'Water' || state.tool === 'Oil' || state.tool === 'Acid'
+  const liquid = state.tool === 'Water'
+    || state.tool === 'Hydrochloric acid'
+    || state.tool === 'Sodium hydroxide'
+    || state.tool === 'Hydrogen peroxide'
+    || state.tool === 'Soap';
+  const sound = liquid
     ? 'water'
-    : state.tool === 'Fire' || state.tool === 'Lava'
+    : state.tool === 'Fire' || state.tool === 'Lava' || state.tool === 'Molten metal'
       ? 'fire'
-      : state.tool === 'Battery' || state.tool === 'Bulb' || state.tool === 'Metal'
+      : state.tool === 'Metal'
         ? 'zap'
-        : state.tool === 'Seed' || state.tool === 'Plant'
-          ? 'plant'
-          : state.tool === 'Eraser'
-            ? 'break'
-            : 'sand';
+        : state.tool === 'Eraser'
+          ? 'break'
+          : 'sand';
   state.sfx.play(sound);
   const temp = state.sim.getTemp(x, y);
   const item = findItem(state.tool);
-  if (item) state.ui.status.textContent = `${item.name} ${temp}° — ${item.blurb}`;
+  if (item) state.ui.status.textContent = `${item.label} ${temp}° — ${item.blurb}`;
 }
 
 function previewCells(state: GameState): Array<[number, number]> | null {
@@ -728,14 +713,22 @@ function playEvents(state: GameState): void {
   }
 }
 
-function checkWin(state: GameState): void {
-  if (!state.challenge || state.celebrated) return;
-  if (!state.challenge.won(state.sim)) return;
+function updateChallenge(state: GameState): void {
+  if (!state.challenge) return;
+  const sample = state.challenge.sample(state.sim);
+  const rows = state.ui.banner.querySelectorAll<HTMLElement>('.step');
+  rows.forEach((row, index) => {
+    const done = sample.steps[index] === true;
+    row.classList.toggle('done', done);
+    row.textContent = `${done ? '* ' : '- '}${state.challenge?.steps[index] ?? ''}`;
+  });
+  if (state.celebrated || !sample.won) return;
   state.celebrated = true;
   writeStar(localStorage, state.challenge.id);
   state.sfx.play('win');
   toast(state, `${state.challenge.name} complete`);
-  renderBanner(state);
+  const text = state.ui.banner.querySelector('.bannertext');
+  if (text) text.textContent = `${state.challenge.name} complete`;
 }
 
 function openSheet(state: GameState, name: '' | 'picker' | 'goals' | 'menu'): void {
@@ -791,6 +784,11 @@ function renderGoals(state: GameState, sheet: HTMLElement): void {
     const goal = el('div', 'goaltext');
     goal.textContent = info.goal;
     copy.append(name, goal);
+    for (const line of info.steps) {
+      const step = el('div', 'goaltext');
+      step.textContent = `- ${line}`;
+      copy.append(step);
+    }
     const play = button('PLAY', `play-${info.id}`);
     play.addEventListener('click', () => beginChallenge(state, info.id));
     row.append(copy, play);
@@ -821,11 +819,20 @@ function renderBanner(state: GameState): void {
   banner.hidden = false;
   const text = el('div', 'bannertext');
   text.textContent = state.celebrated ? `${state.challenge.name} complete` : state.challenge.goal;
+  const steps = el('div', 'steps');
+  for (const line of state.challenge.steps) {
+    const row = el('div', 'step');
+    row.textContent = `- ${line}`;
+    steps.append(row);
+  }
+  const actions = el('div', 'banneractions');
   const restart = button('RESTART', 'restart-challenge');
   const exit = button('EXIT', 'exit-challenge');
   restart.addEventListener('click', () => beginChallenge(state, state.challenge!.id));
   exit.addEventListener('click', () => exitChallenge(state));
-  banner.append(text, restart, exit);
+  actions.append(restart, exit);
+  banner.append(text, steps, actions);
+  updateChallenge(state);
 }
 
 function exitChallenge(state: GameState): void {
@@ -841,7 +848,7 @@ function exitChallenge(state: GameState): void {
 
 function renderMenu(state: GameState, sheet: HTMLElement): void {
   const about = el('p', 'note');
-  about.textContent = 'Paint with one finger. Pinch to look closer. Water on lava makes stone and steam. Crates burn, dissolve, and push liquids aside.';
+  about.textContent = 'Paint with one finger. Pinch to look closer. Acid and base warm into salt and water. Fire melts stone and metal. Water hardens them, with steam.';
   sheet.append(about, state.ui.install);
   const clear = button(state.clearArmed ? 'SURE?' : 'CLEAR ALL', 'clear-all');
   clear.addEventListener('click', () => {
@@ -962,12 +969,20 @@ function toolButton(name: ToolName): HTMLButtonElement {
   choice.type = 'button';
   choice.className = 'tool';
   choice.dataset.tool = name;
-  choice.setAttribute('aria-label', name);
+  const item = findItem(name);
+  const shown = item?.label ?? name;
+  choice.setAttribute('aria-label', shown);
   const img = iconCanvas(name);
   choice.append(img);
   const label = el('span', 'toolname');
-  label.textContent = name;
+  label.textContent = item?.name ?? name;
   choice.append(label);
+  const formula = item?.label.includes('(') ? item.label.slice(item.label.indexOf('(') + 1, -1) : '';
+  if (formula) {
+    const chem = el('span', 'toolformula');
+    chem.textContent = formula;
+    choice.append(chem);
+  }
   return choice;
 }
 

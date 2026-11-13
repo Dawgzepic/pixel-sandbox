@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CONTACT_RULES, DEFS, El } from '../src/sim/elements';
+import { DEFS, El, elementByName, elementLabel, RETIRED } from '../src/sim/elements';
+import { GROUPS } from '../src/ui/icons';
 import { Simulation, assertHealthy } from '../src/sim/simulation';
-import { TUNING } from '../src/sim/tuning';
 import { buildDemo } from '../src/sim/demo';
 import { GRID_H, GRID_W } from '../src/sim/tuning';
 
@@ -9,27 +9,43 @@ function sim(w = 24, h = 32, seed = 3): Simulation {
   return new Simulation(w, h, seed);
 }
 
+const LIVE = [
+  El.Water, El.Acid, El.Base, El.Peroxide, El.Iodide, El.Soap,
+  El.Fire, El.Stone, El.Metal, El.Ice, El.Steam, El.Lava, El.Molten, El.Smoke, El.Wall,
+];
+
 describe('catalog', () => {
-  it('ships a playable set covering every requested family', () => {
-    const names = DEFS.map((d) => d.name);
-    for (const name of [
-      'Sand', 'Water', 'Oil', 'Acid', 'Fire', 'Gunpowder', 'Wood', 'Seed', 'Plant',
-      'Bug', 'Metal', 'Battery', 'Bulb', 'Ice', 'Steam', 'Lava', 'Stone', 'Void',
-      'Clone', 'Portal', 'Wall',
-    ]) {
-      expect(names).toContain(name);
+  it('keeps stable ids and shows formulas on the chemistry set', () => {
+    expect(DEFS).toHaveLength(32);
+    for (let i = 0; i < DEFS.length; i++) expect(DEFS[i].id).toBe(i);
+    expect(elementLabel(elementByName('Water')!)).toBe('Water (H2O)');
+    expect(elementLabel(elementByName('Hydrochloric acid')!)).toBe('Hydrochloric acid (HCl)');
+    expect(elementLabel(elementByName('Sodium hydroxide')!)).toBe('Sodium hydroxide (NaOH)');
+    expect(elementLabel(elementByName('Hydrogen peroxide')!)).toBe('Hydrogen peroxide (H2O2)');
+    expect(elementLabel(elementByName('Potassium iodide')!)).toBe('Potassium iodide (KI)');
+    expect(elementLabel(elementByName('Ice')!)).toBe('Ice (H2O)');
+    expect(elementLabel(elementByName('Steam')!)).toBe('Steam (H2O)');
+    expect(elementLabel(elementByName('Stone')!)).toBe('Stone');
+    expect(elementLabel(elementByName('Metal')!)).toBe('Metal');
+    expect(elementLabel(elementByName('Lava')!)).toBe('Lava');
+    expect(elementLabel(elementByName('Molten metal')!)).toBe('Molten metal');
+    expect(elementLabel(elementByName('Soap')!)).toBe('Soap');
+    const shown = GROUPS.flatMap((group) => group.items.map((item) => item.name));
+    for (const gone of ['Sand', 'Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Wood', 'Battery', 'Bulb']) {
+      expect(shown).not.toContain(gone);
     }
-    expect(DEFS.filter((d) => d.id !== El.Empty).length).toBeGreaterThanOrEqual(15);
+    expect(RETIRED[El.Plant]).toBe(1);
+    expect(RETIRED[El.Water]).toBe(0);
   });
 });
 
 describe('movement', () => {
-  it('drops sand straight down through sleeping chunks', () => {
+  it('drops iodide crystals straight down through sleeping chunks', () => {
     const world = sim(20, 30);
     world.sleepAll();
-    world.setCell(5, 2, El.Sand);
+    world.setCell(5, 2, El.Iodide);
     for (let i = 0; i < 40; i++) world.step();
-    expect(world.get(5, world.h - 2)).toBe(El.Sand);
+    expect(world.get(5, world.h - 2)).toBe(El.Iodide);
     assertHealthy(world);
   });
 
@@ -46,16 +62,16 @@ describe('movement', () => {
     expect(world.count(El.Water)).toBe(1);
   });
 
-  it('floats oil on water', () => {
+  it('floats soap on water', () => {
     const world = sim();
     const y = world.h - 2;
     world.setCell(4, y, El.Stone);
     world.setCell(6, y, El.Stone);
     world.setCell(5, y - 1, El.Water);
-    world.setCell(5, y, El.Oil);
+    world.setCell(5, y, El.Soap);
     world.step();
     expect(world.get(5, y)).toBe(El.Water);
-    expect(world.get(5, y - 1)).toBe(El.Oil);
+    expect(world.get(5, y - 1)).toBe(El.Soap);
   });
 });
 
@@ -72,22 +88,19 @@ describe('reactions', () => {
     expect(world.count(El.Water)).toBe(0);
   });
 
-  it('ignites a plant with the fire brush instead of replacing it', () => {
+  it('heats stone with the fire brush instead of replacing it', () => {
     const world = sim();
-    world.setCell(6, 8, El.Plant);
-    const burned = world.generated[El.Fire];
-    world.paintUser(6, 8, El.Fire);
-    expect(world.get(6, 8)).toBe(El.Fire);
-    expect(world.generated[El.Fire]).toBe(burned + 1);
-
     world.setCell(8, 8, El.Stone);
     world.paintUser(8, 8, El.Fire);
     expect(world.get(8, 8)).toBe(El.Stone);
     expect(world.getTemp(8, 8)).toBeGreaterThan(20);
 
-    world.setCell(10, 8, El.Plant);
-    world.paintUser(10, 8, El.Lava);
-    expect(world.get(10, 8)).toBe(El.Lava);
+    world.paintUser(10, 8, El.Fire);
+    expect(world.get(10, 8)).toBe(El.Fire);
+
+    world.setCell(12, 8, El.Metal);
+    world.paintUser(12, 8, El.Lava);
+    expect(world.get(12, 8)).toBe(El.Lava);
   });
 
   it('melts stone into lava when the fire brush is held on it', () => {
@@ -195,90 +208,83 @@ describe('reactions', () => {
     expect(world.count(El.Steam)).toBeGreaterThanOrEqual(1);
   });
 
-  it('ignites oil, wood, and plants from fire', () => {
+  it('neutralizes acid and base into warm salt and water', () => {
     const world = sim();
     const y = world.h - 2;
-    world.setCell(3, y, El.Fire);
-    world.setCell(4, y, El.Oil);
-    const oilRule = CONTACT_RULES.find((r) => r.self === El.Oil && r.neighbor === El.Fire)!;
-    for (let i = 0; i < oilRule.ticks; i++) world.step();
-    expect(world.count(El.Oil)).toBe(0);
-    expect(world.count(El.Fire)).toBeGreaterThan(0);
-
-    const world2 = sim();
-    world2.setCell(3, y, El.Fire);
-    world2.setCell(4, y, El.Wood);
-    const woodRule = CONTACT_RULES.find((r) => r.self === El.Wood && r.neighbor === El.Fire)!;
-    for (let i = 0; i < woodRule.ticks + 1; i++) world2.step();
-    expect(world2.count(El.Wood)).toBe(0);
-    expect(world2.count(El.Fire)).toBeGreaterThan(0);
-
-    const world3 = sim();
-    world3.setCell(4, y, El.Plant);
-    world3.setCell(3, y, El.Fire);
-    const plantRule = CONTACT_RULES.find((r) => r.self === El.Plant && r.neighbor === El.Fire)!;
-    for (let i = 0; i < plantRule.ticks + 2; i++) world3.step();
-    expect(world3.count(El.Plant)).toBe(0);
+    world.setCell(5, y, El.Acid);
+    world.setCell(6, y, El.Base);
+    world.step();
+    expect(world.count(El.Acid)).toBe(0);
+    expect(world.count(El.Base)).toBe(0);
+    expect(world.count(El.Salt)).toBe(1);
+    expect(world.count(El.Water)).toBe(1);
+    let warm = false;
+    for (let x = 4; x <= 7; x++) {
+      const t = world.get(x, y);
+      if ((t === El.Salt || t === El.Water) && world.getTemp(x, y) > 50) warm = true;
+    }
+    expect(warm).toBe(true);
   });
 
-  it('crusts sand that sits in lava', () => {
+  it('corrodes metal into hydrogen and leaves stone alone', () => {
     const world = sim();
     const y = world.h - 2;
-    world.setCell(3, y, El.Stone);
-    world.setCell(6, y, El.Stone);
-    world.setCell(4, y, El.Lava);
-    world.setCell(5, y, El.Sand);
-    const rule = CONTACT_RULES.find((r) => r.self === El.Sand && r.neighbor === El.Lava)!;
-    for (let i = 0; i < rule.ticks + 3; i++) world.step();
-    let sandLeft = false;
-    for (let x = 3; x <= 6; x++) if (world.get(x, y) === El.Sand) sandLeft = true;
-    expect(sandLeft).toBe(false);
-  });
-
-  it('dissolves wood and sand but not walls', () => {
-    const world = sim();
-    const y = world.h - 2;
-    world.setCell(4, y, El.Acid);
-    world.setCell(5, y, El.Wood);
-    world.setCell(6, 4, El.Wall);
-    world.setCell(7, 4, El.Acid);
-    const steps = DEFS[El.Wood].acidResist;
+    world.setCell(4, y, El.Stone);
+    world.setCell(5, y, El.Metal);
+    world.setCell(6, y, El.Acid);
+    world.setCell(8, 4, El.Wall);
+    const steps = DEFS[El.Metal].acidResist + 2;
     for (let i = 0; i < steps; i++) world.step();
-    expect(world.count(El.Wood)).toBe(0);
+    expect(world.count(El.Hydrogen)).toBeGreaterThan(0);
+    expect(world.count(El.Metal)).toBe(0);
     expect(world.count(El.Acid)).toBeGreaterThan(0);
-    for (let i = 0; i < 8; i++) world.step();
-    expect(world.get(6, 4)).toBe(El.Wall);
+    expect(world.get(4, y)).toBe(El.Stone);
+    expect(world.get(8, 4)).toBe(El.Wall);
   });
 
-  it('explodes gunpowder next to fire or a live wire', () => {
-    const world = sim();
-    const y = world.h - 2;
-    world.setCell(4, y, El.Fire);
-    world.setCell(5, y, El.Gunpowder);
-    world.step();
-    expect(world.get(5, y)).toBe(El.Fire);
-    expect(world.events.some((e) => e.kind === 'explode')).toBe(true);
+  it('lets peroxide alone release a little oxygen, and iodide makes that much faster', () => {
+    const alone = sim(24, 32, 5);
+    fillPeroxide(alone);
+    for (let i = 0; i < 40; i++) alone.step();
+    expect(alone.gasSlow).toBeGreaterThan(0);
+    expect(alone.gasFast).toBe(0);
+    expect(alone.count(El.Foam)).toBe(0);
+    expect(alone.count(El.Peroxide)).toBeGreaterThan(8);
 
-    const wired = sim();
-    wired.setCell(2, y, El.Battery);
-    wired.setCell(3, y, El.Metal);
-    wired.setCell(4, y, El.Metal);
-    wired.setCell(5, y, El.Gunpowder);
-    wired.step();
-    expect(wired.get(5, y)).toBe(El.Fire);
+    const catalyzed = sim(24, 32, 5);
+    fillPeroxide(catalyzed);
+    catalyzed.setCell(8, catalyzed.h - 4, El.Iodide);
+    for (let i = 0; i < 16; i++) catalyzed.step();
+    expect(catalyzed.gasFast).toBeGreaterThan(alone.gasSlow);
+    expect(catalyzed.count(El.Peroxide)).toBeLessThan(alone.count(El.Peroxide));
+    expect(catalyzed.count(El.Foam)).toBe(0);
   });
 
-  it('lights a bulb through metal', () => {
-    const world = sim();
-    const y = 8;
-    world.setCell(2, y, El.Battery);
-    world.setCell(3, y, El.Metal);
-    world.setCell(4, y, El.Metal);
-    world.setCell(5, y, El.Bulb);
-    world.step();
-    expect(world.charge[world.idx(5, y)]).toBeGreaterThan(0);
+  it('turns fast peroxide gas into a tall foam pile when soap is there', () => {
+    const foamy = sim(24, 40, 4);
+    fillPeroxide(foamy);
+    const y = foamy.h - 2;
+    foamy.setCell(8, y - 2, El.Iodide);
+    for (let x = 5; x <= 11; x++) foamy.setCell(x, y - 5, El.Soap);
+    for (let i = 0; i < 24; i++) foamy.step();
+    expect(foamy.gasFast).toBeGreaterThan(6);
+    expect(foamy.count(El.Foam)).toBeGreaterThanOrEqual(24);
+
+    const slow = sim(24, 40, 4);
+    fillPeroxide(slow);
+    for (let x = 5; x <= 11; x++) slow.setCell(x, slow.h - 7, El.Soap);
+    for (let i = 0; i < 24; i++) slow.step();
+    expect(slow.count(El.Foam)).toBeLessThan(foamy.count(El.Foam) / 3);
   });
 });
+
+function fillPeroxide(world: Simulation): void {
+  const y = world.h - 2;
+  for (let x = 4; x <= 12; x++) world.setCell(x, y, El.Stone);
+  for (let x = 5; x <= 11; x++) {
+    for (let dy = 1; dy <= 4; dy++) world.setCell(x, y - dy, El.Peroxide);
+  }
+}
 
 describe('temperature', () => {
   it('keeps lonely ice frozen', () => {
@@ -387,119 +393,12 @@ describe('temperature', () => {
   });
 });
 
-describe('life and magic', () => {
-  it('grows a seed beside water and then a plant upward', () => {
-    const world = sim(20, 36);
-    const y = world.h - 2;
-    world.setCell(4, y, El.Stone);
-    world.setCell(9, y, El.Stone);
-    world.setCell(5, y, El.Seed);
-    world.setCell(6, y, El.Water);
-    world.setCell(7, y, El.Water);
-    world.setCell(8, y, El.Water);
-    for (let i = 0; i < TUNING.seedTicks; i++) world.step();
-    expect(world.get(5, y)).toBe(El.Plant);
-    expect(world.count(El.Water)).toBeLessThan(3);
-    for (let i = 0; i < TUNING.plantGrowTicks * 3; i++) world.step();
-    expect(world.get(5, y - 1)).toBe(El.Plant);
-  });
-
-  it('stops plant growth when the water or the seed budget runs out', () => {
-    const thirsty = sim(18, 16);
-    const y = thirsty.h - 2;
-    thirsty.setCell(2, y, El.Stone);
-    thirsty.setCell(9, y, El.Stone);
-    for (let x = 3; x <= 6; x++) thirsty.setCell(x, y, El.Seed);
-    thirsty.setCell(7, y, El.Water);
-    thirsty.setCell(8, y, El.Water);
-    for (let i = 0; i < 300; i++) thirsty.step();
-    const plants = thirsty.count(El.Plant);
-    expect(plants).toBeGreaterThan(0);
-    expect(plants).toBeLessThanOrEqual(2);
-    expect(thirsty.count(El.Water)).toBe(0);
-    const stopped = plants;
-    for (let i = 0; i < 40; i++) thirsty.step();
-    expect(thirsty.count(El.Plant)).toBe(stopped);
-
-    const watered = sim(20, 24);
-    const floor = watered.h - 2;
-    watered.setCell(3, floor, El.Stone);
-    watered.setCell(14, floor, El.Stone);
-    watered.setCell(4, floor, El.Seed);
-    for (let x = 5; x <= 13; x++) watered.setCell(x, floor, El.Water);
-    for (let i = 0; i < 400; i++) watered.step();
-    expect(watered.count(El.Plant)).toBe(TUNING.seedBudget);
-    expect(watered.count(El.Water)).toBeGreaterThan(0);
-    const grown = watered.count(El.Plant);
-    for (let i = 0; i < 50; i++) watered.step();
-    expect(watered.count(El.Plant)).toBe(grown);
-  });
-
-  it('lets bugs eat plants and die in fire', () => {
-    const world = sim();
-    const y = world.h - 2;
-    world.setCell(5, y, El.Bug);
-    world.setCell(6, y, El.Plant);
-    for (let i = 0; i < TUNING.bugEatTicks; i++) world.step();
-    expect(world.get(6, y)).toBe(El.Empty);
-    expect(world.get(5, y)).toBe(El.Bug);
-
-    const dead = sim();
-    dead.setCell(5, y, El.Bug);
-    dead.setCell(6, y, El.Fire);
-    dead.step();
-    expect(dead.get(5, y)).toBe(El.Empty);
-  });
-
-  it('deletes with void, copies with clone, and teleports through portals', () => {
-    const world = sim();
-    world.setCell(5, 5, El.Void);
-    world.setCell(7, 10, El.Stone);
-    world.setCell(8, 10, El.Stone);
-    world.setCell(9, 10, El.Stone);
-    world.setCell(8, 9, El.Sand);
-    world.step();
-    expect(world.get(8, 9)).toBe(El.Sand);
-    world.setCell(6, 5, El.Sand);
-    world.setCell(5, 6, El.Wall);
-    world.step();
-    expect(world.get(6, 5)).toBe(El.Empty);
-    world.step();
-    world.step();
-    expect(world.get(5, 6)).toBe(El.Wall);
-
-    const clone = sim();
-    clone.setCell(4, 4, El.Stone);
-    clone.setCell(6, 4, El.Stone);
-    clone.setCell(4, 5, El.Stone);
-    clone.setCell(6, 5, El.Stone);
-    clone.setCell(5, 5, El.Clone);
-    clone.setCell(5, 4, El.Sand);
-    clone.step();
-    expect(clone.get(5, 4)).toBe(El.Sand);
-    expect(clone.get(5, 5)).toBe(El.Clone);
-    expect(clone.get(5, 6)).toBe(El.Sand);
-
-    const gate = sim(24, 24);
-    gate.setCell(5, 5, El.Portal, { aux: 1 });
-    gate.setCell(14, 8, El.Portal, { aux: 2 });
-    gate.setCell(5, 4, El.Sand);
-    gate.step();
-    expect(gate.get(5, 4)).toBe(El.Empty);
-    expect(gate.get(5, 5)).toBe(El.Portal);
-    let found = false;
-    for (let y = 6; y <= 10; y++) {
-      for (let x = 12; x <= 16; x++) if (gate.get(x, y) === El.Sand) found = true;
-    }
-    expect(found).toBe(true);
-  });
-});
-
 describe('stress', () => {
   it('stays finite through random painting and the demo scene', () => {
     const world = sim(48, 36, 99);
     for (let i = 0; i < 150; i++) {
-      world.paintUser(1 + world.rng.int(world.w - 2), 1 + world.rng.int(world.h - 2), 1 + world.rng.int(21));
+      const el = LIVE[world.rng.int(LIVE.length)];
+      world.paintUser(1 + world.rng.int(world.w - 2), 1 + world.rng.int(world.h - 2), el);
       if (i % 4 === 0) world.step();
     }
     world.spawnBody('box', 20, 8);

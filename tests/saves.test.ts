@@ -9,7 +9,7 @@ describe('indexedDB slots', () => {
   it('saves, lists, loads, and deletes named worlds', async () => {
     const world = new Simulation(20, 18, 5);
     world.setCell(4, 4, El.Lava);
-    world.setCell(5, 6, El.Seed);
+    world.setCell(5, 6, El.Salt);
     const thumb = 'data:image/png;base64,aaaa';
     await saveSlot(0, 'Camp', world, thumb);
     await saveSlot(2, '   ', world, thumb);
@@ -24,7 +24,7 @@ describe('indexedDB slots', () => {
     const fresh = new Simulation(20, 18, 1);
     applySlot(fresh, loaded!);
     expect(fresh.get(4, 4)).toBe(El.Lava);
-    expect(fresh.get(5, 6)).toBe(El.Seed);
+    expect(fresh.get(5, 6)).toBe(El.Salt);
 
     await deleteSlot(0);
     expect(await loadSlot(0)).toBeNull();
@@ -41,9 +41,9 @@ describe('challenge stars', () => {
       },
     };
     expect(readStars(storage)).toEqual([]);
+    writeStar(storage, 'giant-foam');
+    writeStar(storage, 'giant-foam');
     writeStar(storage, 'make-stone');
-    writeStar(storage, 'make-stone');
-    writeStar(storage, 'power-bulb');
-    expect(readStars(storage).sort()).toEqual(['make-stone', 'power-bulb']);
+    expect(readStars(storage).sort()).toEqual(['giant-foam', 'make-stone']);
   });
 });

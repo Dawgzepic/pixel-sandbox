@@ -11,7 +11,7 @@ export default defineConfig({
       manifest: {
         name: 'Pixel Sandbox',
         short_name: 'Pixel Sandbox',
-        description: 'A retro falling-sand sandbox with fire, plants, electricity, and physics.',
+        description: 'A retro falling-sand sandbox of heat, liquids, and chemistry.',
         lang: 'en',
         id: '/pixel-sandbox/',
         start_url: '/pixel-sandbox/',

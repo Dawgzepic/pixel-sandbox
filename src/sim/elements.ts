@@ -1,13 +1,14 @@
 /**
  * Element catalog.
  *
+ * Ids are stable: saves store them, so retired slots stay reserved and new
+ * materials are appended. Retired cells are scrubbed on load and cannot be painted.
+ *
  * Adding an element later:
- * 1. Append an id in `El` (never renumber old ids — saves store them).
+ * 1. Append an id in `El` (never renumber old ids).
  * 2. Add a row in `DEFS` with a state, density, and the flags below.
  * 3. Powders fall, liquids flow, gases rise, and solids sit automatically.
- * 4. Flammable / acid / heat behavior is flag-driven.
- * 5. Unique rules go in `CONTACT_RULES` / `PAIR_RULES`, or a small branch
- *    in life.ts / reactions.ts / movement.ts when flags are not enough.
+ * 4. Unique chemistry goes in `PAIR_RULES` or reactions.ts.
  */
 export const El = {
   Empty: 0,
@@ -34,19 +35,29 @@ export const El = {
   Wall: 21,
   Smoke: 22,
   Molten: 23,
+  Base: 24,
+  Peroxide: 25,
+  Iodide: 26,
+  Soap: 27,
+  Salt: 28,
+  Hydrogen: 29,
+  Oxygen: 30,
+  Foam: 31,
 } as const;
 
 export type ElId = (typeof El)[keyof typeof El];
 
-export const ELEMENT_COUNT = 24;
+export const ELEMENT_COUNT = 32;
 
-export type ElementState = 'empty' | 'powder' | 'liquid' | 'gas' | 'solid' | 'fire' | 'life';
+export type ElementState = 'empty' | 'powder' | 'liquid' | 'gas' | 'solid' | 'fire' | 'foam';
 
 export interface ElementDef {
   id: number;
   name: string;
-  /** Picker grouping. */
-  category: 'powder' | 'liquid' | 'fire' | 'solid' | 'life' | 'power' | 'gas' | 'magic' | 'tool';
+  /** Chemical formula, when the material has one. */
+  formula?: string;
+  /** Picker grouping. Retired rows are not shown. */
+  category: 'powder' | 'liquid' | 'fire' | 'solid' | 'gas' | 'tool';
   blurb: string;
   color: [number, number, number];
   /** Per-cell RGB jitter, in channel units. */
@@ -58,16 +69,28 @@ export interface ElementDef {
   solid: boolean;
   displaceable: boolean;
   flammable: boolean;
-  /** Ticks of contact before acid deletes it. 0 = immune. */
+  /** Ticks of contact before acid corrodes it. 0 = immune. */
   acidResist: number;
   heatConduct: number;
   defaultTemp: number;
   /** Chunks containing this stay awake so the behavior keeps running. */
   alwaysActive: boolean;
-  /** 0 none, 1 fire/lava, 2 electric, 3 magic. */
+  /** 0 none, 1 fire/lava. */
   glow: number;
   voidImmune: boolean;
   conductive: boolean;
+  /** Old save id. Not paintable, and stripped when a world is loaded. */
+  retired?: boolean;
+}
+
+function retired(id: number, name: string): ElementDef {
+  return {
+    id, name, category: 'solid', blurb: '',
+    color: [40, 32, 48], variance: 0, state: 'solid', density: 9,
+    movable: false, solid: true, displaceable: false, flammable: false,
+    acidResist: 0, heatConduct: 0.05, defaultTemp: 20, alwaysActive: false,
+    glow: 0, voidImmune: true, conductive: false, retired: true,
+  };
 }
 
 export const DEFS: ElementDef[] = [
@@ -78,36 +101,22 @@ export const DEFS: ElementDef[] = [
     acidResist: 0, heatConduct: 0.05, defaultTemp: 20, alwaysActive: false,
     glow: 0, voidImmune: true, conductive: false,
   },
+  retired(El.Sand, 'Sand'),
   {
-    id: El.Sand, name: 'Sand', category: 'powder',
-    blurb: 'Piles up, sinks in water, and crusts into stone on lava.',
-    color: [214, 178, 92], variance: 22, state: 'powder', density: 1.55,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 4, heatConduct: 0.18, defaultTemp: 20, alwaysActive: false,
-    glow: 0, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Water, name: 'Water', category: 'liquid',
+    id: El.Water, name: 'Water', formula: 'H2O', category: 'liquid',
     blurb: 'Flows. Puts out fire. Freezes, boils. Meets lava: stone and steam.',
     color: [64, 126, 214], variance: 14, state: 'liquid', density: 1,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.4, defaultTemp: 18, alwaysActive: true,
     glow: 0, voidImmune: false, conductive: false,
   },
+  retired(El.Oil, 'Oil'),
   {
-    id: El.Oil, name: 'Oil', category: 'liquid',
-    blurb: 'Floats on water. A small spill burns. A pool goes up in a whoosh.',
-    color: [120, 78, 36], variance: 16, state: 'liquid', density: 0.55,
-    movable: true, solid: false, displaceable: true, flammable: true,
-    acidResist: 3, heatConduct: 0.16, defaultTemp: 22, alwaysActive: false,
-    glow: 0, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Acid, name: 'Acid', category: 'liquid',
-    blurb: 'Sinks through sand and dissolves wood, metal, plants, and more.',
-    color: [130, 232, 64], variance: 18, state: 'liquid', density: 1.7,
+    id: El.Acid, name: 'Hydrochloric acid', formula: 'HCl', category: 'liquid',
+    blurb: 'A strong acid. It warms against a base, and it chews into metal.',
+    color: [130, 232, 64], variance: 18, state: 'liquid', density: 1.19,
     movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.3, defaultTemp: 20, alwaysActive: true,
+    acidResist: 0, heatConduct: 0.32, defaultTemp: 20, alwaysActive: true,
     glow: 0, voidImmune: false, conductive: false,
   },
   {
@@ -118,81 +127,32 @@ export const DEFS: ElementDef[] = [
     acidResist: 0, heatConduct: 0.2, defaultTemp: 480, alwaysActive: true,
     glow: 1, voidImmune: false, conductive: false,
   },
+  retired(El.Gunpowder, 'Gunpowder'),
+  retired(El.Wood, 'Wood'),
+  retired(El.Seed, 'Seed'),
+  retired(El.Plant, 'Plant'),
+  retired(El.Bug, 'Bug'),
   {
-    id: El.Gunpowder, name: 'Gunpowder', category: 'powder',
-    blurb: 'Fire, lava, or a spark blows it up and flings whatever is nearby.',
-    color: [72, 66, 78], variance: 12, state: 'powder', density: 1.4,
-    movable: true, solid: false, displaceable: true, flammable: true,
-    acidResist: 4, heatConduct: 0.14, defaultTemp: 20, alwaysActive: false,
-    glow: 0, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Wood, name: 'Wood', category: 'solid',
-    blurb: 'Solid fuel. Holds up structures. Crates and planks burn too.',
-    color: [156, 98, 48], variance: 16, state: 'solid', density: 8,
-    movable: false, solid: true, displaceable: false, flammable: true,
-    acidResist: 8, heatConduct: 0.12, defaultTemp: 20, alwaysActive: false,
-    glow: 0, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Seed, name: 'Seed', category: 'life',
-    blurb: 'Rests by water, drinks, and grows a short vine. No water, no growth.',
-    color: [196, 176, 96], variance: 14, state: 'powder', density: 1.35,
-    movable: true, solid: false, displaceable: true, flammable: true,
-    acidResist: 3, heatConduct: 0.12, defaultTemp: 20, alwaysActive: true,
-    glow: 0, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Plant, name: 'Plant', category: 'life',
-    blurb: 'Climbs while it can drink connected water, then stops. Burns. Bugs eat it.',
-    color: [46, 170, 64], variance: 20, state: 'life', density: 8,
-    movable: false, solid: true, displaceable: false, flammable: true,
-    acidResist: 3, heatConduct: 0.14, defaultTemp: 20, alwaysActive: false,
-    glow: 0, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Bug, name: 'Bug', category: 'life',
-    blurb: 'Crawls, eats plants, and dies in fire, lava, or acid.',
-    color: [214, 64, 118], variance: 14, state: 'life', density: 1.05,
-    movable: false, solid: false, displaceable: true, flammable: false,
-    acidResist: 2, heatConduct: 0.1, defaultTemp: 22, alwaysActive: true,
-    glow: 0, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Metal, name: 'Metal', category: 'power',
+    id: El.Metal, name: 'Metal', category: 'solid',
     blurb: 'Solid conductor. Heats from dull red to white and melts if fire is held on it.',
     color: [176, 190, 206], variance: 8, state: 'solid', density: 9,
     movable: false, solid: true, displaceable: false, flammable: false,
-    acidResist: 16, heatConduct: 1, defaultTemp: 20, alwaysActive: false,
+    acidResist: 8, heatConduct: 1, defaultTemp: 20, alwaysActive: false,
     glow: 0, voidImmune: false, conductive: true,
   },
+  retired(El.Battery, 'Battery'),
+  retired(El.Bulb, 'Bulb'),
   {
-    id: El.Battery, name: 'Battery', category: 'power',
-    blurb: 'Sends electricity through metal. A spark ignites gunpowder.',
-    color: [232, 196, 48], variance: 8, state: 'solid', density: 9,
-    movable: false, solid: true, displaceable: false, flammable: false,
-    acidResist: 12, heatConduct: 0.4, defaultTemp: 22, alwaysActive: false,
-    glow: 2, voidImmune: false, conductive: true,
-  },
-  {
-    id: El.Bulb, name: 'Bulb', category: 'power',
-    blurb: 'Lights up when electricity reaches it through metal.',
-    color: [244, 236, 190], variance: 8, state: 'solid', density: 8,
-    movable: false, solid: true, displaceable: false, flammable: false,
-    acidResist: 8, heatConduct: 0.2, defaultTemp: 20, alwaysActive: false,
-    glow: 2, voidImmune: false, conductive: true,
-  },
-  {
-    id: El.Ice, name: 'Ice', category: 'solid',
-    blurb: 'Stays frozen in open air. Heat, fire, or lava melts it.',
+    id: El.Ice, name: 'Ice', formula: 'H2O', category: 'solid',
+    blurb: 'Frozen water. Stays frozen in open air. Heat, fire, or lava melts it.',
     color: [186, 236, 255], variance: 10, state: 'solid', density: 8,
     movable: false, solid: true, displaceable: false, flammable: false,
-    acidResist: 6, heatConduct: 0.55, defaultTemp: -20, alwaysActive: false,
+    acidResist: 0, heatConduct: 0.55, defaultTemp: -20, alwaysActive: false,
     glow: 0, voidImmune: false, conductive: false,
   },
   {
-    id: El.Steam, name: 'Steam', category: 'gas',
-    blurb: 'Hot gas. Rises, then condenses back into water as it cools.',
+    id: El.Steam, name: 'Steam', formula: 'H2O', category: 'gas',
+    blurb: 'Hot water vapor. Rises, drifts, then condenses as it cools.',
     color: [214, 224, 232], variance: 8, state: 'gas', density: 0.12,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.22, defaultTemp: 120, alwaysActive: true,
@@ -211,33 +171,12 @@ export const DEFS: ElementDef[] = [
     blurb: 'Glows while hot, then cools to gray. Held fire melts it into lava.',
     color: [118, 118, 132], variance: 12, state: 'solid', density: 9,
     movable: false, solid: true, displaceable: false, flammable: false,
-    acidResist: 48, heatConduct: 0.28, defaultTemp: 20, alwaysActive: false,
+    acidResist: 0, heatConduct: 0.28, defaultTemp: 20, alwaysActive: false,
     glow: 0, voidImmune: false, conductive: false,
   },
-  {
-    id: El.Void, name: 'Void', category: 'magic',
-    blurb: 'Deletes whatever touches it. Walls are immune.',
-    color: [36, 0, 48], variance: 8, state: 'solid', density: 9,
-    movable: false, solid: true, displaceable: false, flammable: false,
-    acidResist: 0, heatConduct: 0.02, defaultTemp: 20, alwaysActive: true,
-    glow: 3, voidImmune: true, conductive: false,
-  },
-  {
-    id: El.Clone, name: 'Clone', category: 'magic',
-    blurb: 'Copies whatever touches it across to the opposite side.',
-    color: [198, 96, 255], variance: 12, state: 'solid', density: 9,
-    movable: false, solid: true, displaceable: false, flammable: false,
-    acidResist: 12, heatConduct: 0.08, defaultTemp: 20, alwaysActive: true,
-    glow: 3, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Portal, name: 'Portal', category: 'magic',
-    blurb: 'Paint two colors. Elements that enter one come out the other.',
-    color: [40, 220, 210], variance: 10, state: 'solid', density: 9,
-    movable: false, solid: true, displaceable: false, flammable: false,
-    acidResist: 12, heatConduct: 0.05, defaultTemp: 20, alwaysActive: false,
-    glow: 3, voidImmune: false, conductive: false,
-  },
+  retired(El.Void, 'Void'),
+  retired(El.Clone, 'Clone'),
+  retired(El.Portal, 'Portal'),
   {
     id: El.Wall, name: 'Wall', category: 'tool',
     blurb: 'Indestructible barrier. The eraser can still remove it.',
@@ -255,12 +194,76 @@ export const DEFS: ElementDef[] = [
     glow: 0, voidImmune: false, conductive: false,
   },
   {
-    id: El.Molten, name: 'Molten', category: 'liquid',
+    id: El.Molten, name: 'Molten metal', category: 'liquid',
     blurb: 'Molten metal. Flows and glows. Water hardens it back into hot metal.',
     color: [255, 168, 48], variance: 18, state: 'liquid', density: 3.4,
     movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 10, heatConduct: 0.45, defaultTemp: 1040, alwaysActive: true,
+    acidResist: 0, heatConduct: 0.45, defaultTemp: 1040, alwaysActive: true,
     glow: 1, voidImmune: false, conductive: true,
+  },
+  {
+    id: El.Base, name: 'Sodium hydroxide', formula: 'NaOH', category: 'liquid',
+    blurb: 'A strong base. Against acid it settles into salt and warm water.',
+    color: [214, 196, 255], variance: 12, state: 'liquid', density: 1.12,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.3, defaultTemp: 20, alwaysActive: true,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Peroxide, name: 'Hydrogen peroxide', formula: 'H2O2', category: 'liquid',
+    blurb: 'A pale liquid. On its own it slowly lets a little gas go.',
+    color: [186, 226, 255], variance: 10, state: 'liquid', density: 1.11,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.28, defaultTemp: 20, alwaysActive: true,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Iodide, name: 'Potassium iodide', formula: 'KI', category: 'powder',
+    blurb: 'Pale crystals. They sink in liquids and are not used up.',
+    color: [236, 228, 196], variance: 14, state: 'powder', density: 1.7,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.16, defaultTemp: 20, alwaysActive: false,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Soap, name: 'Soap', category: 'liquid',
+    blurb: 'A light liquid. It floats, and it can hold gas as foam.',
+    color: [255, 176, 214], variance: 12, state: 'liquid', density: 0.82,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.18, defaultTemp: 20, alwaysActive: true,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Salt, name: 'Sodium chloride', formula: 'NaCl', category: 'powder',
+    blurb: 'Salt left behind when an acid and a base meet.',
+    color: [238, 242, 246], variance: 8, state: 'powder', density: 1.35,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.2, defaultTemp: 20, alwaysActive: false,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Hydrogen, name: 'Hydrogen', formula: 'H2', category: 'gas',
+    blurb: 'A light gas. It rises, drifts, and fades.',
+    color: [196, 255, 236], variance: 10, state: 'gas', density: 0.04,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.12, defaultTemp: 30, alwaysActive: true,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Oxygen, name: 'Oxygen', formula: 'O2', category: 'gas',
+    blurb: 'A gas that rises and drifts. Foam can trap it.',
+    color: [255, 228, 210], variance: 10, state: 'gas', density: 0.07,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.12, defaultTemp: 28, alwaysActive: true,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Foam, name: 'Foam', category: 'gas',
+    blurb: 'Bubbles piled up. They hold for a while, then pop.',
+    color: [255, 248, 232], variance: 16, state: 'foam', density: 0.15,
+    movable: true, solid: false, displaceable: false, flammable: false,
+    acidResist: 0, heatConduct: 0.08, defaultTemp: 26, alwaysActive: true,
+    glow: 0, voidImmune: false, conductive: false,
   },
 ];
 
@@ -280,6 +283,7 @@ export const IS_LIQUID = new Uint8Array(ELEMENT_COUNT);
 export const IS_GAS = new Uint8Array(ELEMENT_COUNT);
 export const IS_POWDER = new Uint8Array(ELEMENT_COUNT);
 export const HAS_PAIR = new Uint8Array(ELEMENT_COUNT);
+export const RETIRED = new Uint8Array(ELEMENT_COUNT);
 
 for (const d of DEFS) {
   DENSITY[d.id] = d.density;
@@ -297,44 +301,21 @@ for (const d of DEFS) {
   IS_LIQUID[d.id] = d.state === 'liquid' ? 1 : 0;
   IS_GAS[d.id] = d.state === 'gas' ? 1 : 0;
   IS_POWDER[d.id] = d.state === 'powder' ? 1 : 0;
+  RETIRED[d.id] = d.retired ? 1 : 0;
 }
-
-/** Neighbor sentinel: any charged cell or a battery. */
-export const CHARGE = -1;
 
 export interface ContactRule {
   self: number;
   neighbor: number;
   become: number;
   ticks: number;
-  explode?: boolean;
   setTemp?: number;
 }
 
 export const CONTACT_RULES: ContactRule[] = [
-  { self: El.Sand, neighbor: El.Lava, become: El.Stone, ticks: 5, setTemp: 280 },
-  { self: El.Wood, neighbor: El.Fire, become: El.Fire, ticks: 18, setTemp: 480 },
-  { self: El.Wood, neighbor: El.Lava, become: El.Fire, ticks: 8, setTemp: 520 },
-  { self: El.Plant, neighbor: El.Fire, become: El.Fire, ticks: 10, setTemp: 460 },
-  { self: El.Plant, neighbor: El.Lava, become: El.Fire, ticks: 6, setTemp: 500 },
-  { self: El.Seed, neighbor: El.Fire, become: El.Fire, ticks: 6, setTemp: 460 },
-  { self: El.Oil, neighbor: El.Fire, become: El.Fire, ticks: 3, setTemp: 500 },
-  { self: El.Oil, neighbor: El.Lava, become: El.Fire, ticks: 2, setTemp: 540 },
-  { self: El.Gunpowder, neighbor: El.Fire, become: El.Fire, ticks: 1, explode: true },
-  { self: El.Gunpowder, neighbor: El.Lava, become: El.Fire, ticks: 1, explode: true },
-  { self: El.Gunpowder, neighbor: El.Molten, become: El.Fire, ticks: 1, explode: true },
-  { self: El.Gunpowder, neighbor: CHARGE, become: El.Fire, ticks: 1, explode: true },
-  { self: El.Wood, neighbor: El.Molten, become: El.Fire, ticks: 8, setTemp: 560 },
-  { self: El.Plant, neighbor: El.Molten, become: El.Fire, ticks: 6, setTemp: 520 },
-  { self: El.Seed, neighbor: El.Molten, become: El.Fire, ticks: 4, setTemp: 500 },
-  { self: El.Oil, neighbor: El.Molten, become: El.Fire, ticks: 2, setTemp: 560 },
-  { self: El.Bug, neighbor: El.Molten, become: El.Fire, ticks: 2, setTemp: 520 },
   { self: El.Ice, neighbor: El.Molten, become: El.Water, ticks: 2, setTemp: 40 },
   { self: El.Ice, neighbor: El.Fire, become: El.Water, ticks: 4, setTemp: 10 },
   { self: El.Ice, neighbor: El.Lava, become: El.Water, ticks: 2, setTemp: 30 },
-  { self: El.Bug, neighbor: El.Fire, become: El.Empty, ticks: 1 },
-  { self: El.Bug, neighbor: El.Acid, become: El.Empty, ticks: 1 },
-  { self: El.Bug, neighbor: El.Lava, become: El.Empty, ticks: 1 },
 ];
 
 export const RULES_FOR: ContactRule[][] = Array.from({ length: ELEMENT_COUNT }, () => []);
@@ -355,6 +336,7 @@ export const PAIR_RULES: PairRule[] = [
   { a: El.Water, b: El.Molten, aTo: El.Steam, bTo: El.Metal, aTemp: 120, bTemp: 480 },
   { a: El.Water, b: El.Fire, aTo: El.Steam, bTo: El.Empty, aTemp: 110, bTemp: 20 },
   { a: El.Ice, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 140, bTemp: 280 },
+  { a: El.Acid, b: El.Base, aTo: El.Salt, bTo: El.Water, aTemp: 68, bTemp: 84 },
 ];
 
 const pairMap = new Map<number, PairRule>();
@@ -390,5 +372,10 @@ export const PHASE_RULES: PhaseRule[] = [
 
 export function elementByName(name: string): ElementDef | undefined {
   const lower = name.toLowerCase();
-  return DEFS.find((d) => d.name.toLowerCase() === lower);
+  return DEFS.find((d) => d.name.toLowerCase() === lower && !d.retired);
+}
+
+/** Common name, plus the formula when the material has one. */
+export function elementLabel(def: Pick<ElementDef, 'name' | 'formula'>): string {
+  return def.formula ? `${def.name} (${def.formula})` : def.name;
 }

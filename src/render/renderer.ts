@@ -227,21 +227,11 @@ export class Renderer {
       r = 16;
       g = 8;
       b = 22;
-    } else if (t === El.Portal) {
-      const alt = sim.aux[i] === 2;
-      const base = alt ? [255, 74, 196] : [42, 224, 214];
-      const delta = ((sim.variation[i] - 8) / 8) * 12;
-      r = base[0] + delta;
-      g = base[1] + delta * 0.4;
-      b = base[2] + delta * 0.4;
-    } else if (t === El.Bulb && sim.charge[i] > 0) {
-      r = 255;
-      g = 246;
-      b = 150;
-    } else if (t === El.Metal && sim.charge[i] > 0) {
-      r = 150;
-      g = 214;
-      b = 255;
+    } else if (t === El.Foam) {
+      const bubble = ((x * 5 + y * 3 + sim.variation[i]) & 3) === 0;
+      r = bubble ? 255 : 248;
+      g = bubble ? 252 : 236;
+      b = bubble ? 244 : 214;
     } else {
       const o = (t * 16 + sim.variation[i]) * 3;
       r = LUT[o];
@@ -269,8 +259,6 @@ export class Renderer {
         const t = sim.type[i];
         let glow = GLOW[t];
         let power = 0.28;
-        if ((t === El.Bulb || t === El.Metal) && sim.charge[i] > 0) glow = 2;
-        if (t === El.Battery) glow = 2;
         if (t === El.Stone) {
           const heat = Math.max(0, Math.min(1, (sim.temp[i] - 50) / 420));
           if (heat > 0.08) {
@@ -285,7 +273,6 @@ export class Renderer {
             power = 0.22 + heat * 0.5;
           }
         }
-        if (t === El.Bulb && sim.charge[i] > 0) power = 0.55;
         if (!glow) continue;
         const hot = glow === 1;
         const magic = glow === 3;
