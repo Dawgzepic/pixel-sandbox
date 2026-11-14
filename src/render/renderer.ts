@@ -1,7 +1,7 @@
 import { DEFS, El, GLOW } from '../sim/elements';
 import type { Simulation } from '../sim/simulation';
 import type { View } from './camera';
-import { showsBubble } from './bubbles';
+import { BUBBLE_TEMP, risingBoil, type BoilCell, type RiseMark } from './bubbles';
 
 const LUT = buildLut();
 
@@ -173,6 +173,7 @@ export class Renderer {
     let r: number;
     let g: number;
     let b: number;
+    const boil = !this.tempMode && (t === El.Empty || t === El.Water || t === El.Steam) ? this.boilMark(x, y) : null;
     if (this.tempMode) {
       const empty = t === El.Empty;
       const calm = empty && Math.abs(sim.temp[i] - 20) < 8;
@@ -224,6 +225,11 @@ export class Renderer {
       r = 255;
       g = 110 + heat * 130;
       b = 28 + heat * 90;
+    } else if (boil) {
+      const rgb = boilColor(boil);
+      r = rgb[0];
+      g = rgb[1];
+      b = rgb[2];
     } else if (t === El.Empty) {
       r = 16;
       g = 8;
@@ -234,10 +240,6 @@ export class Renderer {
       r = (pane ? 214 : 96) + (255 - (pane ? 214 : 96)) * heat;
       g = (pane ? 236 : 150) + (150 - (pane ? 236 : 150)) * heat;
       b = (pane ? 244 : 176) + (48 - (pane ? 244 : 176)) * heat;
-    } else if (t === El.Water && showsBubble(x, y, sim.frame, sim.temp[i])) {
-      r = 236;
-      g = 248;
-      b = 255;
     } else if (t === El.MoltenGlass) {
       const heat = Math.max(0, Math.min(1, (sim.temp[i] - 700) / 500));
       r = 255;
@@ -306,6 +308,11 @@ export class Renderer {
     }
   }
 
+  private boilMark(x: number, y: number): RiseMark | null {
+    const { sim } = this;
+    return risingBoil((cx, cy) => boilCell(sim, cx, cy), x, y, sim.frame);
+  }
+
   private drawOutline(screen: CanvasRenderingContext2D, view: View, cells: Array<[number, number]>): void {
     const s = view.scale;
     screen.strokeStyle = '#ffe6a8';
@@ -329,6 +336,25 @@ export class Renderer {
       screen.fillRect(p.x, p.y, s, s);
     }
   }
+}
+
+function boilCell(sim: Simulation, x: number, y: number): BoilCell {
+  if (!sim.inBounds(x, y)) return 'solid';
+  const t = sim.type[sim.idx(x, y)];
+  if (t === El.Water && sim.temp[sim.idx(x, y)] >= BUBBLE_TEMP) return 'boiling';
+  if (t === El.Empty || t === El.Steam) return 'open';
+  return 'solid';
+}
+
+/** A bubble starts pale in the water and matches steam by the time it leaves the surface. */
+function boilColor(mark: RiseMark): [number, number, number] {
+  const lift = Math.max(0, Math.min(1, mark.lift));
+  const r = 156 + (214 - 156) * lift;
+  const g = 198 + (224 - 198) * lift;
+  const b = 248 + (232 - 248) * lift;
+  if (mark.place === 'steam') return [214, 224, 232];
+  const shade = 0.8 + 0.2 * mark.strength;
+  return [r * shade, g * shade, b * shade];
 }
 
 export function worldToCss(wx: number, wy: number, view: View): { x: number; y: number } {

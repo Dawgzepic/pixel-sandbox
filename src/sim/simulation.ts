@@ -12,6 +12,7 @@ import { stepElectricity } from './electricity';
 import { stepHeat } from './heat';
 import { stepMovement } from './movement';
 import { stepReactions } from './reactions';
+import { BUBBLE_TEMP, STEAM_TRAIL } from '../render/bubbles';
 import { AMBIENT, CHUNK, TUNING } from './tuning';
 
 export type CellOrigin = 'user' | 'system';
@@ -210,7 +211,7 @@ export class Simulation {
     this.setCell(x, y, el, { origin: 'user', aux: opts?.aux });
   }
 
-  /** Fire brush heats the cell. It never replaces what is already there. Glass heats slowly. */
+  /** Fire brush heats the cell. It never replaces what is already there, and it never melts glass. */
   private scorch(x: number, y: number): void {
     this.addHeat(x, y, this.heatGain(x, y, TUNING.fireBrush));
   }
@@ -236,16 +237,6 @@ export class Simulation {
   private addHeat(x: number, y: number, delta: number): void {
     const i = this.idx(x, y);
     this.temp[i] = clampTemp(this.temp[i] + delta);
-    // Glass sheds heat into whatever it touches, so a temperature spike would
-    // melt a dish at once. A held brush has to soak the pane instead.
-    if (delta > 0 && this.type[i] === El.Glass) {
-      const soaked = Math.min(255, this.aux2[i] + 1);
-      this.aux2[i] = soaked;
-      if (soaked >= 200) {
-        this.setCell(x, y, El.MoltenGlass, { temp: 1320, origin: 'system' });
-        return;
-      }
-    }
     this.wake(x, y);
   }
 
@@ -346,11 +337,21 @@ export class Simulation {
     }
   }
 
-  /** Keep boiling water redrawing so the bubbles keep rising. */
+  /** Keep boiling water, and the steam just above it, redrawing as bubbles rise. */
   private markBoiling(): void {
     const { type, temp, w } = this;
     for (let i = 0; i < type.length; i++) {
-      if (type[i] === El.Water && temp[i] >= 88) this.markVisual(i % w, (i / w) | 0);
+      if (type[i] !== El.Water || temp[i] < BUBBLE_TEMP) continue;
+      const x = i % w;
+      const y = (i / w) | 0;
+      this.markVisual(x, y);
+      for (let d = 1; d <= STEAM_TRAIL; d++) {
+        const ny = y - d;
+        if (ny < 0) break;
+        const nt = type[ny * w + x];
+        if (nt !== El.Empty && nt !== El.Steam) break;
+        this.markVisual(x, ny);
+      }
     }
   }
 

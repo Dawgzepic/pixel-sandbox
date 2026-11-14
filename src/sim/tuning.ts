@@ -14,8 +14,15 @@ export const TUNING = {
   fireInject: 14,
   /** Heat added to a cell each time the fire brush is held on it. */
   fireBrush: 110,
-  /** Glass takes a long hold. The same small step is used by fire and Warmer. */
+  /** Fire and Warmer warm a glass dish. They never melt it. */
   glassHeat: 4,
+  /**
+   * Lava against glass advances the melt counter once every this many steps.
+   * With glassLavaTicks, contact lasts much longer than ice in a flame.
+   */
+  glassLavaStride: 2,
+  /** Melt steps of lava contact before glass becomes molten. Fits in a byte. */
+  glassLavaTicks: 255,
   /** Warmer brush. Boils water after a short hold, not in one tap. */
   warmer: 16,
   /** Cooler brush. Freezes water only after the temperature is held down. */

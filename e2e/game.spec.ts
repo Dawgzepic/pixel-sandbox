@@ -14,6 +14,13 @@ test.beforeEach(async ({ page }) => {
 
 test('phone screen shows the sandbox, picker, and temperature', async ({ page }) => {
   await page.evaluate(() => window.__PIXEL_SANDBOX__!.setPaused(true));
+  const controls = page.locator('.controls');
+  await expect(controls.locator('[data-testid="pause"]')).toBeVisible();
+  await expect(controls.getByRole('button', { name: 'Warmer' })).toBeVisible();
+  await expect(controls.getByRole('button', { name: 'Cooler' })).toBeVisible();
+  await expect(controls.getByRole('button', { name: 'MENU' })).toBeVisible();
+  await expect(page.locator('.quick').getByRole('button', { name: 'Warmer' })).toHaveCount(0);
+  await expect(page.locator('.quick').getByRole('button', { name: 'Cooler' })).toHaveCount(0);
   await page.screenshot({ path: '/opt/cursor/artifacts/pixel-sandbox-main.png' });
 
   await page.getByRole('button', { name: 'ALL', exact: true }).click();

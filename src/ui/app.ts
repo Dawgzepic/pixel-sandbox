@@ -210,6 +210,7 @@ interface Shell {
   speed: HTMLButtonElement;
   sound: HTMLButtonElement;
   menu: HTMLButtonElement;
+  controls: HTMLElement;
   size: HTMLButtonElement;
   sizeMenu: HTMLElement;
   hand: HTMLButtonElement;
@@ -237,8 +238,10 @@ function buildShell(root: HTMLElement, canvas: HTMLCanvasElement): Shell {
   const speed = button('1X', 'speed');
   const sound = button('MUTE', 'sound');
   const menu = button('MENU', 'menu');
+  const warmer = heatButton('Warmer');
+  const cooler = heatButton('Cooler');
   sound.setAttribute('aria-pressed', 'false');
-  controls.append(play, step, speed, sound, menu);
+  controls.append(play, warmer, cooler, menu, step, speed, sound);
   const stage = el('div', 'stage');
   stage.append(canvas);
   const status = el('div', 'status');
@@ -273,11 +276,19 @@ function buildShell(root: HTMLElement, canvas: HTMLCanvasElement): Shell {
   install.hidden = true;
   app.append(main, dock, sheet, toast);
   root.append(app);
-  return { fps, status, play, step, speed, sound, menu, size, sizeMenu, hand, shape, all, quick, sheet, install, toast };
+  return { fps, status, play, step, speed, sound, menu, controls, size, sizeMenu, hand, shape, all, quick, sheet, install, toast };
 }
 
 function wireControls(state: GameState): void {
   const { ui } = state;
+  for (const name of ['Warmer', 'Cooler'] as const) {
+    const heat = ui.controls.querySelector<HTMLButtonElement>(`[data-tool="${name}"]`);
+    heat?.addEventListener('click', () => {
+      state.sfx.resume();
+      state.sfx.play('ui');
+      selectTool(state, name);
+    });
+  }
   ui.play.addEventListener('click', () => {
     state.sfx.resume();
     togglePause(state);
@@ -395,8 +406,11 @@ function selectTool(state: GameState, name: string): void {
   if (!item) return;
   state.tool = item.name;
   state.ui.status.textContent = `${item.label} — ${item.blurb}`;
-  for (const button of state.ui.quick.querySelectorAll('button')) {
-    button.classList.toggle('selected', button.dataset.tool === item.name);
+  for (const node of state.ui.controls.querySelectorAll<HTMLButtonElement>('[data-tool]')) {
+    node.classList.toggle('selected', node.dataset.tool === item.name);
+  }
+  for (const node of state.ui.quick.querySelectorAll('button')) {
+    node.classList.toggle('selected', node.dataset.tool === item.name);
   }
 }
 
@@ -826,6 +840,14 @@ function toast(state: GameState, message: string): void {
   window.setTimeout(() => {
     if (state.ui.toast.textContent === message) state.ui.toast.hidden = true;
   }, 2400);
+}
+
+function heatButton(name: 'Warmer' | 'Cooler'): HTMLButtonElement {
+  const node = button(name.toUpperCase(), name.toLowerCase());
+  node.dataset.tool = name;
+  node.classList.add('heat');
+  node.setAttribute('aria-label', name);
+  return node;
 }
 
 function toolButton(name: ToolName): HTMLButtonElement {

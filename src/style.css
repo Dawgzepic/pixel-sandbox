@@ -66,8 +66,13 @@ html, body {
 
 .controls {
   overflow-x: auto;
+  flex-wrap: wrap;
   padding: 6px 8px;
   scrollbar-width: none;
+}
+
+.heat {
+  min-width: 0;
 }
 
 .brushrow {

@@ -141,6 +141,11 @@ function inject(sim: Simulation): void {
             add(sim, x, y + 1, TUNING.lavaInject);
             add(sim, x - 1, y, TUNING.lavaInject);
             add(sim, x + 1, y, TUNING.lavaInject);
+            // A body of lava stays hot long enough to melt glass. A lone drop still crusts.
+            if (t === El.Lava && lavaNeighbors(sim, x, y) >= 2) {
+              const i = y * w + x;
+              if (sim.temp[i] < 900) sim.temp[i] = Math.min(900, sim.temp[i] + 24);
+            }
           } else if (t === El.Ice) {
             chill(sim, x, y - 1);
             chill(sim, x, y + 1);
@@ -151,6 +156,17 @@ function inject(sim: Simulation): void {
       }
     }
   }
+}
+
+function lavaNeighbors(sim: Simulation, x: number, y: number): number {
+  let n = 0;
+  for (let k = 0; k < 4; k++) {
+    const nx = x + DX[k];
+    const ny = y + DY[k];
+    if (!sim.inBounds(nx, ny)) continue;
+    if (sim.type[sim.idx(nx, ny)] === El.Lava) n++;
+  }
+  return n;
 }
 
 function add(sim: Simulation, x: number, y: number, delta: number): void {
@@ -184,8 +200,9 @@ function shareThroughGlass(sim: Simulation): void {
         if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
         const j = ny * w + nx;
         const nt = type[j];
-        // Open air is not a heat sink. A pane should pass heat into a real material, and stay molten once it finally melts.
-        if (nt === El.Empty || nt === El.Glass || nt === El.MoltenGlass) continue;
+        // Open air is not a heat sink. Lava is a heat source of its own: pulling a
+        // third of it into the pane would turn the lava to stone in one touch.
+        if (nt === El.Empty || nt === El.Glass || nt === El.MoltenGlass || nt === El.Lava) continue;
         const diff = tp - temp[j];
         let flow = Math.trunc(diff * 0.35);
         if (flow === 0 && Math.abs(diff) >= 4) flow = diff > 0 ? 1 : -1;

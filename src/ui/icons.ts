@@ -131,7 +131,7 @@ export const GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
   {
     label: 'Tools',
     items: [
-      { name: 'Warmer', label: 'Warmer', blurb: 'Heats whatever is already there. Hold it to boil water or melt a solid.' },
+      { name: 'Warmer', label: 'Warmer', blurb: 'Heats whatever is already there. Hold it to boil water. It does not melt glass.' },
       { name: 'Cooler', label: 'Cooler', blurb: 'Cools whatever is already there. Hold it to freeze water into ice.' },
       { name: 'Eraser', label: 'Eraser', blurb: 'Removes elements. The outline shows the brush.' },
     ],
@@ -145,8 +145,6 @@ export const QUICK: ToolName[] = [
   'Hydrochloric acid',
   'Sodium hydroxide',
   'Glass',
-  'Warmer',
-  'Cooler',
   'Fire',
   'Stone',
   'Metal',

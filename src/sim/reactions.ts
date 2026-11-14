@@ -1,5 +1,6 @@
 import { ACID_RESIST, El, findPair, HAS_PAIR, RULES_FOR } from './elements';
 import type { Simulation } from './simulation';
+import { TUNING } from './tuning';
 
 const DX = [0, 0, -1, 1];
 const DY = [-1, 1, 0, 0];
@@ -24,6 +25,7 @@ export function stepReactions(sim: Simulation): void {
           if (HAS_PAIR[t] && tryPair(sim, x, y)) continue;
           if (RULES_FOR[t].length && tryContact(sim, x, y)) continue;
           if (t === El.Acid) doAcid(sim, x, y);
+          else if (t === El.Glass) soakGlass(sim, x, y);
         }
       }
     }
@@ -87,6 +89,31 @@ function neighborIs(sim: Simulation, x: number, y: number, neighbor: number): bo
     if (sim.type[sim.idx(nx, ny)] === neighbor) return true;
   }
   return false;
+}
+
+/**
+ * Lava melts glass only after a long contact. Fire never does, so a dish can
+ * hold a heat experiment. The counter advances every glassLavaStride steps,
+ * which is far slower than ice melting in a flame, and it resets if the lava leaves.
+ */
+function soakGlass(sim: Simulation, x: number, y: number): void {
+  const i = sim.idx(x, y);
+  if (!neighborIs(sim, x, y, El.Lava)) {
+    sim.aux[i] = 0;
+    sim.aux2[i] = 0;
+    return;
+  }
+  const tick = sim.aux[i] + 1;
+  if (tick < TUNING.glassLavaStride) {
+    sim.aux[i] = tick;
+    return;
+  }
+  sim.aux[i] = 0;
+  const soaked = Math.min(255, sim.aux2[i] + 1);
+  sim.aux2[i] = soaked;
+  if (soaked >= TUNING.glassLavaTicks) {
+    sim.setCell(x, y, El.MoltenGlass, { temp: 1320, origin: 'system' });
+  }
 }
 
 /** Acid eats metal and leaves hydrogen. Glass, stone, and walls stay. */

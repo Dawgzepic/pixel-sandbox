@@ -228,7 +228,7 @@ export const DEFS: ElementDef[] = [
   retired(El.Foam, 'Foam'),
   {
     id: El.Glass, name: 'Glass', formula: 'SiO2', category: 'solid',
-    blurb: 'A clear dish. Heat passes through it. Acid leaves it alone. Melting it takes a long hold.',
+    blurb: 'A clear dish. Fire will not melt it, and heat still passes through. Lava melts it only after a long contact.',
     color: [168, 214, 228], variance: 18, state: 'solid', density: 8,
     movable: false, solid: true, displaceable: false, flammable: false,
     acidResist: 0, heatConduct: 1, defaultTemp: 20, alwaysActive: false,
@@ -356,7 +356,6 @@ export const PHASE_RULES: PhaseRule[] = [
   { from: El.Stone, to: El.Lava, op: '>', temp: 1100, setTemp: 960 },
   { from: El.Metal, to: El.Molten, op: '>', temp: 1000, setTemp: 1040 },
   { from: El.Molten, to: El.Metal, op: '<', temp: 520, setTemp: 480 },
-  { from: El.Glass, to: El.MoltenGlass, op: '>', temp: 1300, setTemp: 1320 },
   { from: El.MoltenGlass, to: El.Glass, op: '<', temp: 520, setTemp: 400 },
 ];
 

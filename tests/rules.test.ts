@@ -3,7 +3,7 @@ import { DEFS, El, elementByName, elementLabel, RETIRED } from '../src/sim/eleme
 import { GROUPS } from '../src/ui/icons';
 import { Simulation, assertHealthy } from '../src/sim/simulation';
 import { buildDemo } from '../src/sim/demo';
-import { GRID_H, GRID_W } from '../src/sim/tuning';
+import { GRID_H, GRID_W, TUNING } from '../src/sim/tuning';
 
 function sim(w = 24, h = 32, seed = 3): Simulation {
   return new Simulation(w, h, seed);
@@ -267,20 +267,36 @@ describe('reactions', () => {
     expect(world.count(El.Metal)).toBe(0);
   });
 
-  it('melts glass only after a long hold and hardens it in water', () => {
+  it('keeps glass solid in fire and melts it only after a long lava contact', () => {
+    const hold = TUNING.glassLavaStride * TUNING.glassLavaTicks;
+    expect(hold).toBeGreaterThan(200);
+    expect(hold).toBeGreaterThan(4 * 30);
+
+    const fired = sim();
+    const fy = fired.h - 2;
+    fired.setCell(8, fy, El.Glass);
+    for (let i = 0; i < 400; i++) {
+      fired.paintUser(8, fy, El.Fire);
+      fired.step();
+    }
+    expect(fired.get(8, fy)).toBe(El.Glass);
+    expect(fired.getTemp(8, fy)).toBeGreaterThan(40);
+
     const world = sim();
     const y = world.h - 2;
-    world.setCell(8, y, El.Glass);
-    for (let i = 0; i < 40; i++) {
-      world.paintUser(8, y, El.Fire);
-      world.step();
+    world.setCell(5, y, El.Stone);
+    world.setCell(6, y, El.Glass);
+    world.setCell(10, y, El.Stone);
+    for (const row of [y - 1, y]) {
+      world.setCell(7, row, El.Lava);
+      world.setCell(8, row, El.Lava);
+      world.setCell(9, row, El.Lava);
     }
-    expect(world.get(8, y)).toBe(El.Glass);
-    expect(world.getTemp(8, y)).toBeGreaterThan(40);
-    for (let i = 0; i < 320 && world.count(El.MoltenGlass) === 0; i++) {
-      world.paintUser(8, y, El.Fire);
-      world.step();
-    }
+    for (let i = 0; i < 40; i++) world.step();
+    expect(world.get(6, y)).toBe(El.Glass);
+    expect(world.get(7, y)).toBe(El.Lava);
+    const steps = hold + 4;
+    for (let i = 40; i < steps && world.count(El.MoltenGlass) === 0; i++) world.step();
     expect(world.count(El.MoltenGlass)).toBeGreaterThan(0);
 
     const quenched = sim();
