@@ -1,4 +1,4 @@
-import { ACID_RESIST, El, findPair, HAS_PAIR, RULES_FOR } from './elements';
+import { El, findPair, HAS_PAIR, RULES_FOR } from './elements';
 import type { Simulation } from './simulation';
 import { TUNING } from './tuning';
 
@@ -24,8 +24,7 @@ export function stepReactions(sim: Simulation): void {
           if (t === El.Empty) continue;
           if (HAS_PAIR[t] && tryPair(sim, x, y)) continue;
           if (RULES_FOR[t].length && tryContact(sim, x, y)) continue;
-          if (t === El.Acid) doAcid(sim, x, y);
-          else if (t === El.Glass) soakGlass(sim, x, y);
+          if (t === El.Glass) soakGlass(sim, x, y);
         }
       }
     }
@@ -55,7 +54,6 @@ function tryPair(sim: Simulation, x: number, y: number): boolean {
     sim.setCell(nx, ny, otherTo, { temp: otherTemp, origin: 'system' });
     sim.reacted[sim.idx(x, y)] = 1;
     sim.reacted[sim.idx(nx, ny)] = 1;
-    if (selfTo === El.Salt || otherTo === El.Salt) sim.emit('splash', x, y);
     return true;
   }
   return false;
@@ -114,35 +112,4 @@ function soakGlass(sim: Simulation, x: number, y: number): void {
   if (soaked >= TUNING.glassLavaTicks) {
     sim.setCell(x, y, El.MoltenGlass, { temp: 1320, origin: 'system' });
   }
-}
-
-/** Acid eats metal and leaves hydrogen. Glass, stone, and walls stay. */
-function doAcid(sim: Simulation, x: number, y: number): void {
-  const i = sim.idx(x, y);
-  let tx = -1;
-  let ty = -1;
-  let resist = 0;
-  for (let k = 0; k < 4; k++) {
-    const nx = x + DX[k];
-    const ny = y + DY[k];
-    if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
-    const nt = sim.type[sim.idx(nx, ny)];
-    if (nt !== El.Metal) continue;
-    const r = ACID_RESIST[nt];
-    if (r > 0 && (tx < 0 || r < resist)) {
-      tx = nx;
-      ty = ny;
-      resist = r;
-    }
-  }
-  if (tx < 0) {
-    sim.aux[i] = 0;
-    return;
-  }
-  sim.aux[i]++;
-  if (sim.aux[i] < resist) return;
-  sim.aux[i] = 0;
-  sim.setCell(tx, ty, El.Hydrogen, { temp: 32, aux: 48, origin: 'system' });
-  sim.setTemp(x, y, Math.min(72, sim.getTemp(x, y) + 14));
-  sim.emit('splash', tx, ty);
 }

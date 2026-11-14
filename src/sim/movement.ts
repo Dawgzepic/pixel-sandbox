@@ -1,4 +1,4 @@
-import { ACID_RESIST, DENSITY, El, findPair, FLAMMABLE, IS_GAS, IS_LIQUID, MOVABLE } from './elements';
+import { DENSITY, El, findPair, FLAMMABLE, IS_GAS, IS_LIQUID, MOVABLE } from './elements';
 import type { Simulation } from './simulation';
 
 const DX = [0, 0, -1, 1];
@@ -45,10 +45,6 @@ function moveCell(sim: Simulation, x: number, y: number): void {
     moveSmoke(sim, x, y);
     return;
   }
-  if (t === El.Hydrogen) {
-    moveFadingGas(sim, x, y);
-    return;
-  }
   if (IS_GAS[t]) {
     moveGas(sim, x, y);
     return;
@@ -76,7 +72,6 @@ function shove(sim: Simulation, x: number, y: number): boolean {
 }
 
 function moveFall(sim: Simulation, x: number, y: number, t: number): void {
-  if (shouldCling(sim, x, y, t)) return;
   const density = DENSITY[t];
   const liquid = IS_LIQUID[t] === 1;
   // Diagonal bias flips every frame. Horizontal flow commits for a few
@@ -91,32 +86,6 @@ function moveFall(sim: Simulation, x: number, y: number, t: number): void {
   for (const dx of side) {
     if (tryEnter(sim, x, y, x + dx, y, density, false)) return;
   }
-}
-
-function shouldCling(sim: Simulation, x: number, y: number, t: number): boolean {
-  if (t === El.Acid) {
-    for (let k = 0; k < 4; k++) {
-      const nx = x + DX[k];
-      const ny = y + DY[k];
-      if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
-      if (ACID_RESIST[sim.type[sim.idx(nx, ny)]] > 0) return true;
-    }
-  }
-  return false;
-}
-
-function moveFadingGas(sim: Simulation, x: number, y: number): void {
-  const i = sim.idx(x, y);
-  if (sim.aux[i] <= 1) {
-    sim.setCell(x, y, El.Empty, { origin: 'system' });
-    return;
-  }
-  sim.aux[i]--;
-  const drift = Math.sign(sim.impulseX[i]) || (sim.rng.next() < 0.65 ? sim.rng.int(3) - 1 : 0);
-  decayImpulse(sim, i);
-  if (drift !== 0 && sim.rng.next() < 0.55 && tryEmpty(sim, x, y, x + drift, y - 1)) return;
-  if (tryEmpty(sim, x, y, x, y - 1)) return;
-  if (drift !== 0) tryEmpty(sim, x, y, x + drift, y);
 }
 
 function moveGas(sim: Simulation, x: number, y: number): void {

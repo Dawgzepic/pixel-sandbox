@@ -36,8 +36,8 @@ export function buildDemo(sim: Simulation): void {
   }
   sim.setCell(fx + 1, ground - 4, El.Fire, { aux: 80 });
 
-  cup(sim, 8, ground, 6, 5, El.Acid, El.Glass);
-  cup(sim, 80, ground, 6, 5, El.Base, El.Glass);
+  cup(sim, 8, ground, 6, 5, El.Water, El.Glass);
+  cup(sim, 80, ground, 6, 5, El.Water, El.Glass);
   cup(sim, pond + 2, ground - 10, 8, 4, El.Water, El.Glass);
 
   const basin = fx + 8;

@@ -635,9 +635,7 @@ function stamp(state: GameState, x: number, y: number): void {
     painted = true;
   }
   if (!painted) return;
-  const liquid = state.tool === 'Water'
-    || state.tool === 'Hydrochloric acid'
-    || state.tool === 'Sodium hydroxide';
+  const liquid = state.tool === 'Water';
   const sound = liquid
     ? 'water'
     : state.tool === 'Fire' || state.tool === 'Lava' || state.tool === 'Molten metal' || state.tool === 'Molten glass'
@@ -729,7 +727,7 @@ function renderPicker(state: GameState, sheet: HTMLElement): void {
 
 function renderMenu(state: GameState, sheet: HTMLElement): void {
   const about = el('p', 'note');
-  about.textContent = 'Paint with one finger. Pinch to look closer. Glass holds a liquid and lets heat through. Warmer and Cooler change temperature without painting over. Acid and base make salt, and salt dissolves into pale saltwater.';
+  about.textContent = 'Paint with one finger. Pinch to look closer. Glass holds a liquid and lets heat through. Warmer and Cooler change temperature without painting over.';
   sheet.append(about, state.ui.install);
   const clear = button(state.clearArmed ? 'SURE?' : 'CLEAR ALL', 'clear-all');
   clear.addEventListener('click', () => {

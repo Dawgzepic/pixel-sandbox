@@ -10,8 +10,8 @@ function sim(w = 24, h = 32, seed = 3): Simulation {
 }
 
 const LIVE = [
-  El.Water, El.Acid, El.Base, El.Glass, El.MoltenGlass,
-  El.Fire, El.Stone, El.Metal, El.Ice, El.Steam, El.Lava, El.Molten, El.Smoke, El.Saltwater,
+  El.Water, El.Glass, El.MoltenGlass,
+  El.Fire, El.Stone, El.Metal, El.Ice, El.Steam, El.Lava, El.Molten, El.Smoke,
 ];
 
 describe('catalog', () => {
@@ -19,8 +19,11 @@ describe('catalog', () => {
     expect(DEFS).toHaveLength(35);
     for (let i = 0; i < DEFS.length; i++) expect(DEFS[i].id).toBe(i);
     expect(elementLabel(elementByName('Water')!)).toBe('Water (H2O)');
-    expect(elementLabel(elementByName('Hydrochloric acid')!)).toBe('Hydrochloric acid (HCl)');
-    expect(elementLabel(elementByName('Sodium hydroxide')!)).toBe('Sodium hydroxide (NaOH)');
+    expect(elementByName('Hydrochloric acid')).toBeUndefined();
+    expect(elementByName('Sodium hydroxide')).toBeUndefined();
+    expect(elementByName('Sodium chloride')).toBeUndefined();
+    expect(elementByName('Saltwater')).toBeUndefined();
+    expect(elementByName('Hydrogen')).toBeUndefined();
     expect(elementLabel(elementByName('Glass')!)).toBe('Glass (SiO2)');
     expect(elementLabel(elementByName('Ice')!)).toBe('Ice (H2O)');
     expect(elementLabel(elementByName('Steam')!)).toBe('Steam (H2O)');
@@ -30,23 +33,29 @@ describe('catalog', () => {
     expect(elementLabel(elementByName('Molten metal')!)).toBe('Molten metal');
     expect(elementLabel(elementByName('Molten glass')!)).toBe('Molten glass');
     const shown = GROUPS.flatMap((group) => group.items.map((item) => item.name));
-    for (const gone of ['Sand', 'Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Wood', 'Battery', 'Bulb', 'Hydrogen peroxide', 'Potassium iodide', 'Soap', 'Wall', 'Box', 'Ball', 'Plank']) {
+    for (const gone of ['Sand', 'Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Wood', 'Battery', 'Bulb', 'Hydrogen peroxide', 'Potassium iodide', 'Soap', 'Wall', 'Box', 'Ball', 'Plank', 'Hydrochloric acid', 'Sodium hydroxide', 'Sodium chloride', 'Saltwater', 'Hydrogen']) {
       expect(shown).not.toContain(gone);
     }
     expect(RETIRED[El.Plant]).toBe(1);
     expect(RETIRED[El.Peroxide]).toBe(1);
     expect(RETIRED[El.Foam]).toBe(1);
+    expect(RETIRED[El.Acid]).toBe(1);
+    expect(RETIRED[El.Base]).toBe(1);
+    expect(RETIRED[El.Salt]).toBe(1);
+    expect(RETIRED[El.Saltwater]).toBe(1);
+    expect(RETIRED[El.Hydrogen]).toBe(1);
     expect(RETIRED[El.Water]).toBe(0);
   });
 });
 
 describe('movement', () => {
-  it('drops salt straight down through sleeping chunks', () => {
+  it('drops water straight down through sleeping chunks', () => {
     const world = sim(20, 30);
     world.sleepAll();
-    world.setCell(5, 2, El.Salt);
-    for (let i = 0; i < 40; i++) world.step();
-    expect(world.get(5, world.h - 2)).toBe(El.Salt);
+    world.setCell(5, 2, El.Water);
+    const steps = world.h - 2 - 2;
+    for (let i = 0; i < steps; i++) world.step();
+    expect(world.get(5, world.h - 2)).toBe(El.Water);
     assertHealthy(world);
   });
 
@@ -216,57 +225,6 @@ describe('reactions', () => {
     expect(world.count(El.Steam)).toBeGreaterThanOrEqual(1);
   });
 
-  it('neutralizes acid and base into warm salt and water', () => {
-    const world = sim();
-    const y = world.h - 2;
-    world.setCell(5, y, El.Acid);
-    world.setCell(6, y, El.Base);
-    world.step();
-    expect(world.count(El.Acid)).toBe(0);
-    expect(world.count(El.Base)).toBe(0);
-    expect(world.count(El.Salt)).toBe(1);
-    expect(world.count(El.Water)).toBe(1);
-    let warm = false;
-    for (let x = 4; x <= 7; x++) {
-      const t = world.get(x, y);
-      if ((t === El.Salt || t === El.Water) && world.getTemp(x, y) > 50) warm = true;
-    }
-    expect(warm).toBe(true);
-  });
-
-  it('corrodes metal into hydrogen and leaves stone alone', () => {
-    const world = sim();
-    const y = world.h - 2;
-    world.setCell(4, y, El.Stone);
-    world.setCell(5, y, El.Metal);
-    world.setCell(6, y, El.Acid);
-    world.setCell(8, 4, El.Stone);
-    const steps = DEFS[El.Metal].acidResist + 2;
-    for (let i = 0; i < steps; i++) world.step();
-    expect(world.count(El.Hydrogen)).toBeGreaterThan(0);
-    expect(world.count(El.Metal)).toBe(0);
-    expect(world.count(El.Acid)).toBeGreaterThan(0);
-    expect(world.get(4, y)).toBe(El.Stone);
-    expect(world.get(8, 4)).toBe(El.Stone);
-  });
-
-  it('leaves glass intact while acid eats the metal beside it', () => {
-    const world = sim();
-    const y = world.h - 2;
-    world.setCell(4, y, El.Glass);
-    world.setCell(5, y, El.Glass);
-    world.setCell(6, y, El.Acid);
-    world.setCell(7, y, El.Metal);
-    world.setCell(8, y, El.Acid);
-    const steps = DEFS[El.Metal].acidResist + 4;
-    for (let i = 0; i < steps; i++) world.step();
-    expect(world.get(4, y)).toBe(El.Glass);
-    expect(world.get(5, y)).toBe(El.Glass);
-    expect(world.count(El.Glass)).toBe(2);
-    expect(world.count(El.Hydrogen)).toBeGreaterThan(0);
-    expect(world.count(El.Metal)).toBe(0);
-  });
-
   it('keeps glass solid in fire and melts it only after a long lava contact', () => {
     const hold = TUNING.glassLavaStride * TUNING.glassLavaTicks;
     expect(hold).toBeGreaterThan(200);
@@ -331,26 +289,6 @@ describe('reactions', () => {
     expect(boiled).toBe(true);
     expect(world.count(El.Steam)).toBeGreaterThan(0);
     for (let x = 7; x <= 11; x++) expect(world.get(x, y - 1)).toBe(El.Glass);
-  });
-
-  it('mixes salt and water into paler saltwater and leaves nearby fresh water', () => {
-    const water = elementByName('Water')!;
-    const brine = elementByName('Saltwater')!;
-    const waterLum = water.color[0] + water.color[1] + water.color[2];
-    const brineLum = brine.color[0] + brine.color[1] + brine.color[2];
-    expect(brineLum).toBeGreaterThan(waterLum + 80);
-
-    const world = sim();
-    const y = world.h - 2;
-    world.setCell(4, y, El.Stone);
-    world.setCell(8, y, El.Stone);
-    world.setCell(5, y, El.Water);
-    world.setCell(6, y, El.Salt);
-    world.setCell(7, y, El.Water);
-    world.step();
-    expect(world.get(5, y)).toBe(El.Saltwater);
-    expect(world.get(6, y)).toBe(El.Saltwater);
-    expect(world.get(7, y)).toBe(El.Water);
   });
 
   it('warms water into steam without replacing it, and cools water into ice', () => {

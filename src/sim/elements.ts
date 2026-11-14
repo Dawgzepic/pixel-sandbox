@@ -114,14 +114,7 @@ export const DEFS: ElementDef[] = [
     glow: 0, voidImmune: false, conductive: false,
   },
   retired(El.Oil, 'Oil'),
-  {
-    id: El.Acid, name: 'Hydrochloric acid', formula: 'HCl', category: 'liquid',
-    blurb: 'A strong acid. It warms against a base, and it chews into metal.',
-    color: [130, 232, 64], variance: 18, state: 'liquid', density: 1.19,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.32, defaultTemp: 20, alwaysActive: true,
-    glow: 0, voidImmune: false, conductive: false,
-  },
+  retired(El.Acid, 'Hydrochloric acid'),
   {
     id: El.Fire, name: 'Fire', category: 'fire',
     blurb: 'Ignites and heats whatever is already there. Only empty air becomes flame.',
@@ -197,33 +190,12 @@ export const DEFS: ElementDef[] = [
     acidResist: 0, heatConduct: 0.45, defaultTemp: 1040, alwaysActive: true,
     glow: 1, voidImmune: false, conductive: true,
   },
-  {
-    id: El.Base, name: 'Sodium hydroxide', formula: 'NaOH', category: 'liquid',
-    blurb: 'A strong base. Against acid it settles into salt and warm water.',
-    color: [214, 196, 255], variance: 12, state: 'liquid', density: 1.12,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.3, defaultTemp: 20, alwaysActive: true,
-    glow: 0, voidImmune: false, conductive: false,
-  },
+  retired(El.Base, 'Sodium hydroxide'),
   retired(El.Peroxide, 'Hydrogen peroxide'),
   retired(El.Iodide, 'Potassium iodide'),
   retired(El.Soap, 'Soap'),
-  {
-    id: El.Salt, name: 'Sodium chloride', formula: 'NaCl', category: 'powder',
-    blurb: 'Salt left behind when an acid and a base meet.',
-    color: [238, 242, 246], variance: 8, state: 'powder', density: 1.35,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.2, defaultTemp: 20, alwaysActive: false,
-    glow: 0, voidImmune: false, conductive: false,
-  },
-  {
-    id: El.Hydrogen, name: 'Hydrogen', formula: 'H2', category: 'gas',
-    blurb: 'A light gas. It rises, drifts, and fades.',
-    color: [196, 255, 236], variance: 10, state: 'gas', density: 0.04,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.12, defaultTemp: 30, alwaysActive: true,
-    glow: 0, voidImmune: false, conductive: false,
-  },
+  retired(El.Salt, 'Sodium chloride'),
+  retired(El.Hydrogen, 'Hydrogen'),
   retired(El.Oxygen, 'Oxygen'),
   retired(El.Foam, 'Foam'),
   {
@@ -242,14 +214,7 @@ export const DEFS: ElementDef[] = [
     acidResist: 0, heatConduct: 0.4, defaultTemp: 1040, alwaysActive: true,
     glow: 1, voidImmune: false, conductive: false,
   },
-  {
-    id: El.Saltwater, name: 'Saltwater', formula: 'NaCl', category: 'liquid',
-    blurb: 'Salt dissolved in water. Paler than fresh water.',
-    color: [186, 220, 242], variance: 8, state: 'liquid', density: 1,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.4, defaultTemp: 20, alwaysActive: true,
-    glow: 0, voidImmune: false, conductive: false,
-  },
+  retired(El.Saltwater, 'Saltwater'),
 ];
 
 export const DENSITY = new Float32Array(ELEMENT_COUNT);
@@ -323,8 +288,6 @@ export const PAIR_RULES: PairRule[] = [
   { a: El.Water, b: El.MoltenGlass, aTo: El.Steam, bTo: El.Glass, aTemp: 120, bTemp: 420 },
   { a: El.Water, b: El.Fire, aTo: El.Steam, bTo: El.Empty, aTemp: 110, bTemp: 20 },
   { a: El.Ice, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 140, bTemp: 280 },
-  { a: El.Acid, b: El.Base, aTo: El.Salt, bTo: El.Water, aTemp: 68, bTemp: 84 },
-  { a: El.Salt, b: El.Water, aTo: El.Saltwater, bTo: El.Saltwater, aTemp: 22, bTemp: 22 },
 ];
 
 const pairMap = new Map<number, PairRule>();
