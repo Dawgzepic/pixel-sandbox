@@ -23,6 +23,12 @@ export const TUNING = {
   glassLavaStride: 2,
   /** Melt steps of lava contact before glass becomes molten. Fits in a byte. */
   glassLavaTicks: 255,
+  /** Saltwater against metal advances rust once every this many steps. */
+  rustStride: 2,
+  /** Rust steps before metal becomes solid rust. With the stride, a little past the glass melt. */
+  rustTicks: 255,
+  /** Further saltwater contact before solid rust crumbles into powder. */
+  crumbleTicks: 80,
   /** Warmer brush. Boils water after a short hold, not in one tap. */
   warmer: 16,
   /** Cooler brush. Freezes water only after the temperature is held down. */

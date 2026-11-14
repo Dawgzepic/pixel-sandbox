@@ -25,15 +25,18 @@ describe('save bytes', () => {
 
   it('turns removed chemistry into empty space', () => {
     const world = new Simulation(12, 12, 4);
-    const removed = [El.Acid, El.Base, El.Salt, El.Saltwater, El.Hydrogen];
+    const removed = [El.Acid, El.Base, El.Hydrogen];
     removed.forEach((id, n) => {
       world.type[world.idx(2, 2 + n)] = id;
     });
+    world.setCell(4, 4, El.Salt);
+    world.setCell(5, 4, El.Saltwater);
     const copy = new Simulation(12, 12, 1);
     decodeWorld(copy, encodeWorld(world));
     for (let n = 0; n < removed.length; n++) expect(copy.get(2, 2 + n)).toBe(El.Empty);
+    expect(copy.get(4, 4)).toBe(El.Salt);
+    expect(copy.get(5, 4)).toBe(El.Saltwater);
     expect(copy.count(El.Acid)).toBe(0);
-    expect(copy.count(El.Saltwater)).toBe(0);
   });
 
   it('rejects a damaged save and a save for another size', () => {

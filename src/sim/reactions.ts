@@ -5,7 +5,7 @@ import { TUNING } from './tuning';
 const DX = [0, 0, -1, 1];
 const DY = [-1, 1, 0, 0];
 
-/** Contact chemistry: neutralization, quenching, ice, and acid on metal. */
+/** Contact chemistry: quenching, ice, salt, rust, and the sodium flame. */
 export function stepReactions(sim: Simulation): void {
   const { w, h, chunkCols, chunkRows, chunkTtl, type, reacted } = sim;
 
@@ -25,6 +25,9 @@ export function stepReactions(sim: Simulation): void {
           if (HAS_PAIR[t] && tryPair(sim, x, y)) continue;
           if (RULES_FOR[t].length && tryContact(sim, x, y)) continue;
           if (t === El.Glass) soakGlass(sim, x, y);
+          else if (t === El.Metal) rustMetal(sim, x, y);
+          else if (t === El.Rust) crumbleRust(sim, x, y);
+          else if (t === El.Fire) tintSodium(sim, x, y);
         }
       }
     }
@@ -112,4 +115,46 @@ function soakGlass(sim: Simulation, x: number, y: number): void {
   if (soaked >= TUNING.glassLavaTicks) {
     sim.setCell(x, y, El.MoltenGlass, { temp: 1320, origin: 'system' });
   }
+}
+
+/** Saltwater eats metal into solid rust, then that rust crumbles. Fresh water does not. */
+function rustMetal(sim: Simulation, x: number, y: number): void {
+  const soaked = soakContact(sim, x, y, El.Saltwater, TUNING.rustStride);
+  if (soaked >= TUNING.rustTicks) sim.setCell(x, y, El.Rust, { temp: 20, origin: 'system' });
+}
+
+function crumbleRust(sim: Simulation, x: number, y: number): void {
+  const soaked = soakContact(sim, x, y, El.Saltwater, TUNING.rustStride);
+  if (soaked >= TUNING.crumbleTicks) sim.setCell(x, y, El.RustPowder, { temp: 20, origin: 'system' });
+}
+
+function soakContact(sim: Simulation, x: number, y: number, neighbor: number, stride: number): number {
+  const i = sim.idx(x, y);
+  if (!neighborIs(sim, x, y, neighbor)) {
+    sim.aux[i] = 0;
+    sim.aux2[i] = 0;
+    return 0;
+  }
+  const tick = sim.aux[i] + 1;
+  if (tick < stride) {
+    sim.aux[i] = tick;
+    return sim.aux2[i];
+  }
+  sim.aux[i] = 0;
+  const soaked = Math.min(255, sim.aux2[i] + 1);
+  sim.aux2[i] = soaked;
+  return soaked;
+}
+
+/** Salt in a flame turns that flame bright yellow, then lets it fade back. */
+function tintSodium(sim: Simulation, x: number, y: number): void {
+  const i = sim.idx(x, y);
+  if (neighborIs(sim, x, y, El.Salt)) {
+    sim.variation[i] = 48;
+    sim.markVisual(x, y);
+    return;
+  }
+  if (sim.variation[i] < 16) return;
+  sim.variation[i]--;
+  sim.markVisual(x, y);
 }

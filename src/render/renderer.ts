@@ -173,7 +173,7 @@ export class Renderer {
     let r: number;
     let g: number;
     let b: number;
-    const boil = !this.tempMode && (t === El.Empty || t === El.Water || t === El.Steam) ? this.boilMark(x, y) : null;
+    const boil = !this.tempMode && (t === El.Empty || t === El.Water || t === El.Saltwater || t === El.Steam) ? this.boilMark(x, y) : null;
     if (this.tempMode) {
       const empty = t === El.Empty;
       const calm = empty && Math.abs(sim.temp[i] - 20) < 8;
@@ -189,10 +189,16 @@ export class Renderer {
         b = tb * shade;
       }
     } else if (t === El.Fire) {
-      const flick = (sim.frame * 3 + x * 5 + y * 2) & 7;
-      r = 255;
-      g = 70 + flick * 22;
-      b = 16 + (flick & 3) * 14;
+      if (isSodiumFlame(sim.variation[i])) {
+        r = 255;
+        g = 236;
+        b = 64;
+      } else {
+        const flick = (sim.frame * 3 + x * 5 + y * 2) & 7;
+        r = 255;
+        g = 70 + flick * 22;
+        b = 16 + (flick & 3) * 14;
+      }
     } else if (t === El.Smoke) {
       const puff = 90 + (sim.aux[i] % 28) + ((x + y + sim.frame) & 3) * 6;
       r = puff;
@@ -338,10 +344,15 @@ export class Renderer {
   }
 }
 
+/** Salt in the flame pushes this above the normal color jitter, then it counts back down. */
+export function isSodiumFlame(variation: number): boolean {
+  return variation >= 16;
+}
+
 function boilCell(sim: Simulation, x: number, y: number): BoilCell {
   if (!sim.inBounds(x, y)) return 'solid';
   const t = sim.type[sim.idx(x, y)];
-  if (t === El.Water && sim.temp[sim.idx(x, y)] >= BUBBLE_TEMP) return 'boiling';
+  if ((t === El.Water || t === El.Saltwater) && sim.temp[sim.idx(x, y)] >= BUBBLE_TEMP) return 'boiling';
   if (t === El.Empty || t === El.Steam) return 'open';
   return 'solid';
 }

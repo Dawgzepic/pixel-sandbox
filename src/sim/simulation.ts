@@ -341,7 +341,7 @@ export class Simulation {
   private markBoiling(): void {
     const { type, temp, w } = this;
     for (let i = 0; i < type.length; i++) {
-      if (type[i] !== El.Water || temp[i] < BUBBLE_TEMP) continue;
+      if ((type[i] !== El.Water && type[i] !== El.Saltwater) || temp[i] < BUBBLE_TEMP) continue;
       const x = i % w;
       const y = (i / w) | 0;
       this.markVisual(x, y);

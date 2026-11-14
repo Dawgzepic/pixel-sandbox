@@ -5,7 +5,11 @@ export type ToolName =
   | 'Warmer'
   | 'Cooler'
   | 'Water'
+  | 'Saltwater'
+  | 'Salt'
+  | 'Rust powder'
   | 'Glass'
+  | 'Rust'
   | 'Molten glass'
   | 'Fire'
   | 'Smoke'
@@ -118,9 +122,10 @@ export interface PaletteItem {
 export const GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
   {
     label: 'Liquids',
-    items: [item('Water')],
+    items: [item('Water'), item('Saltwater')],
   },
-  { label: 'Solids', items: [item('Stone'), item('Glass'), item('Metal'), item('Ice')] },
+  { label: 'Powders', items: [item('Salt'), item('Rust powder')] },
+  { label: 'Solids', items: [item('Stone'), item('Glass'), item('Metal'), item('Rust'), item('Ice')] },
   { label: 'Heat', items: [item('Fire'), item('Lava'), item('Molten metal'), item('Molten glass'), item('Steam'), item('Smoke')] },
   {
     label: 'Tools',
@@ -136,6 +141,8 @@ export const OUTLINE_TOOLS: ReadonlySet<ToolName> = new Set(['Eraser', 'Warmer',
 
 export const QUICK: ToolName[] = [
   'Water',
+  'Salt',
+  'Saltwater',
   'Glass',
   'Fire',
   'Stone',

@@ -232,6 +232,20 @@ function chill(sim: Simulation, x: number, y: number): void {
   sim.wake(x, y);
 }
 
+/** Boiling saltwater leaves the salt in place and sends the water off as steam. */
+function boilOffSalt(sim: Simulation, x: number, y: number): void {
+  sim.setCell(x, y, El.Salt, { temp: 40, origin: 'system' });
+  const spots: Array<[number, number]> = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  for (const [dx, dy] of spots) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+    if (sim.get(nx, ny) !== El.Empty) continue;
+    sim.setCell(nx, ny, El.Steam, { temp: 115, origin: 'system' });
+    return;
+  }
+}
+
 function phase(sim: Simulation): void {
   const { w, h, chunkCols, chunkRows, chunkTtl, type, temp } = sim;
   for (let cy = 0; cy < chunkRows; cy++) {
@@ -247,6 +261,14 @@ function phase(sim: Simulation): void {
           const t = type[i];
           if (t === El.Empty || sim.isBorder(x, y)) continue;
           const tp = temp[i];
+          if (t === El.Saltwater && tp > 100) {
+            boilOffSalt(sim, x, y);
+            continue;
+          }
+          if (t === El.Saltwater && tp < -8) {
+            sim.setCell(x, y, El.Ice, { temp: -8, origin: 'system' });
+            continue;
+          }
           for (const rule of PHASE_RULES) {
             if (rule.from !== t) continue;
             const hit = rule.op === '>' ? tp > rule.temp : tp < rule.temp;

@@ -10,19 +10,21 @@ function sim(w = 24, h = 32, seed = 3): Simulation {
 }
 
 const LIVE = [
-  El.Water, El.Glass, El.MoltenGlass,
-  El.Fire, El.Stone, El.Metal, El.Ice, El.Steam, El.Lava, El.Molten, El.Smoke,
+  El.Water, El.Salt, El.Saltwater, El.Glass, El.MoltenGlass,
+  El.Fire, El.Stone, El.Metal, El.Rust, El.RustPowder, El.Ice, El.Steam, El.Lava, El.Molten, El.Smoke,
 ];
 
 describe('catalog', () => {
   it('keeps stable ids and shows formulas on the chemistry set', () => {
-    expect(DEFS).toHaveLength(35);
+    expect(DEFS).toHaveLength(37);
     for (let i = 0; i < DEFS.length; i++) expect(DEFS[i].id).toBe(i);
     expect(elementLabel(elementByName('Water')!)).toBe('Water (H2O)');
     expect(elementByName('Hydrochloric acid')).toBeUndefined();
     expect(elementByName('Sodium hydroxide')).toBeUndefined();
     expect(elementByName('Sodium chloride')).toBeUndefined();
-    expect(elementByName('Saltwater')).toBeUndefined();
+    expect(elementLabel(elementByName('Salt')!)).toBe('Salt (NaCl)');
+    expect(elementLabel(elementByName('Saltwater')!)).toBe('Saltwater');
+    expect(elementLabel(elementByName('Rust')!)).toBe('Rust (Fe2O3)');
     expect(elementByName('Hydrogen')).toBeUndefined();
     expect(elementLabel(elementByName('Glass')!)).toBe('Glass (SiO2)');
     expect(elementLabel(elementByName('Ice')!)).toBe('Ice (H2O)');
@@ -33,7 +35,7 @@ describe('catalog', () => {
     expect(elementLabel(elementByName('Molten metal')!)).toBe('Molten metal');
     expect(elementLabel(elementByName('Molten glass')!)).toBe('Molten glass');
     const shown = GROUPS.flatMap((group) => group.items.map((item) => item.name));
-    for (const gone of ['Sand', 'Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Wood', 'Battery', 'Bulb', 'Hydrogen peroxide', 'Potassium iodide', 'Soap', 'Wall', 'Box', 'Ball', 'Plank', 'Hydrochloric acid', 'Sodium hydroxide', 'Sodium chloride', 'Saltwater', 'Hydrogen']) {
+    for (const gone of ['Sand', 'Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Wood', 'Battery', 'Bulb', 'Hydrogen peroxide', 'Potassium iodide', 'Soap', 'Wall', 'Box', 'Ball', 'Plank', 'Hydrochloric acid', 'Sodium hydroxide', 'Sodium chloride', 'Hydrogen']) {
       expect(shown).not.toContain(gone);
     }
     expect(RETIRED[El.Plant]).toBe(1);
@@ -41,8 +43,8 @@ describe('catalog', () => {
     expect(RETIRED[El.Foam]).toBe(1);
     expect(RETIRED[El.Acid]).toBe(1);
     expect(RETIRED[El.Base]).toBe(1);
-    expect(RETIRED[El.Salt]).toBe(1);
-    expect(RETIRED[El.Saltwater]).toBe(1);
+    expect(RETIRED[El.Salt]).toBe(0);
+    expect(RETIRED[El.Saltwater]).toBe(0);
     expect(RETIRED[El.Hydrogen]).toBe(1);
     expect(RETIRED[El.Water]).toBe(0);
   });

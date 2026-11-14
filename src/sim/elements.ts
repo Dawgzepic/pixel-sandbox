@@ -46,11 +46,13 @@ export const El = {
   Glass: 32,
   MoltenGlass: 33,
   Saltwater: 34,
+  Rust: 35,
+  RustPowder: 36,
 } as const;
 
 export type ElId = (typeof El)[keyof typeof El];
 
-export const ELEMENT_COUNT = 35;
+export const ELEMENT_COUNT = 37;
 
 export type ElementState = 'empty' | 'powder' | 'liquid' | 'gas' | 'solid' | 'fire' | 'foam';
 
@@ -194,7 +196,14 @@ export const DEFS: ElementDef[] = [
   retired(El.Peroxide, 'Hydrogen peroxide'),
   retired(El.Iodide, 'Potassium iodide'),
   retired(El.Soap, 'Soap'),
-  retired(El.Salt, 'Sodium chloride'),
+  {
+    id: El.Salt, name: 'Salt', formula: 'NaCl', category: 'powder',
+    blurb: 'One grain dissolves into one water pixel. Extra salt sinks and stays solid.',
+    color: [238, 242, 246], variance: 8, state: 'powder', density: 1.5,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.2, defaultTemp: 20, alwaysActive: false,
+    glow: 0, voidImmune: false, conductive: false,
+  },
   retired(El.Hydrogen, 'Hydrogen'),
   retired(El.Oxygen, 'Oxygen'),
   retired(El.Foam, 'Foam'),
@@ -214,7 +223,30 @@ export const DEFS: ElementDef[] = [
     acidResist: 0, heatConduct: 0.4, defaultTemp: 1040, alwaysActive: true,
     glow: 1, voidImmune: false, conductive: false,
   },
-  retired(El.Saltwater, 'Saltwater'),
+  {
+    id: El.Saltwater, name: 'Saltwater', category: 'liquid',
+    blurb: 'A half-and-half mix. Boiling it leaves the salt behind.',
+    color: [118, 168, 226], variance: 8, state: 'liquid', density: 1.2,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.4, defaultTemp: 20, alwaysActive: true,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Rust, name: 'Rust', formula: 'Fe2O3', category: 'solid',
+    blurb: 'Iron oxide. Saltwater keeps eating it until it crumbles into powder.',
+    color: [176, 84, 36], variance: 14, state: 'solid', density: 8,
+    movable: false, solid: true, displaceable: false, flammable: false,
+    acidResist: 0, heatConduct: 0.3, defaultTemp: 20, alwaysActive: false,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.RustPowder, name: 'Rust powder', formula: 'Fe2O3', category: 'powder',
+    blurb: 'Crumpled rust. It falls and piles up.',
+    color: [196, 112, 48], variance: 16, state: 'powder', density: 1.6,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.2, defaultTemp: 20, alwaysActive: false,
+    glow: 0, voidImmune: false, conductive: false,
+  },
 ];
 
 export const DENSITY = new Float32Array(ELEMENT_COUNT);
@@ -288,6 +320,7 @@ export const PAIR_RULES: PairRule[] = [
   { a: El.Water, b: El.MoltenGlass, aTo: El.Steam, bTo: El.Glass, aTemp: 120, bTemp: 420 },
   { a: El.Water, b: El.Fire, aTo: El.Steam, bTo: El.Empty, aTemp: 110, bTemp: 20 },
   { a: El.Ice, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 140, bTemp: 280 },
+  { a: El.Salt, b: El.Water, aTo: El.Saltwater, bTo: El.Saltwater, aTemp: 22, bTemp: 22 },
 ];
 
 const pairMap = new Map<number, PairRule>();
