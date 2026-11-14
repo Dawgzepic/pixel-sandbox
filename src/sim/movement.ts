@@ -1,4 +1,4 @@
-import { DENSITY, El, findPair, FLAMMABLE, IS_GAS, IS_LIQUID, MOVABLE } from './elements';
+import { DENSITY, El, findPair, FLAMMABLE, IS_GAS, IS_LIQUID, IS_SOLID, MOVABLE } from './elements';
 import type { Simulation } from './simulation';
 
 const DX = [0, 0, -1, 1];
@@ -172,6 +172,7 @@ function decayImpulse(sim: Simulation, i: number): void {
 
 function tryEmpty(sim: Simulation, x: number, y: number, nx: number, ny: number): boolean {
   if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) return false;
+  if (cornerSealed(sim, x, y, nx, ny)) return false;
   if (sim.bodyBlock[sim.idx(nx, ny)]) return false;
   if (sim.type[sim.idx(nx, ny)] !== El.Empty) return false;
   sim.swap(x, y, nx, ny);
@@ -188,6 +189,9 @@ function tryEnter(
   rising: boolean,
 ): boolean {
   if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) return false;
+  // A diagonal step between two solids that only meet at a corner would leak
+  // through a thin glass line. Orthogonal moves are unchanged.
+  if (cornerSealed(sim, x, y, nx, ny)) return false;
   if (quench(sim, x, y, nx, ny)) return true;
   const dest = sim.idx(nx, ny);
   if (sim.bodyBlock[dest]) return false;
@@ -202,6 +206,22 @@ function tryEnter(
     return true;
   }
   return false;
+}
+
+/**
+ * True when a diagonal move would pass through the corner where two solids meet.
+ * A stair-step glass cup only touches at those corners, and that still has to hold.
+ */
+function cornerSealed(sim: Simulation, x: number, y: number, nx: number, ny: number): boolean {
+  const dx = nx - x;
+  const dy = ny - y;
+  if (dx === 0 || dy === 0) return false;
+  return solidBarrier(sim, x + dx, y) && solidBarrier(sim, x, y + dy);
+}
+
+function solidBarrier(sim: Simulation, x: number, y: number): boolean {
+  if (!sim.inBounds(x, y) || sim.isBorder(x, y)) return true;
+  return IS_SOLID[sim.type[sim.idx(x, y)]] === 1;
 }
 
 /** Lava, molten metal, or molten glass meeting water hardens in that step, with steam. */

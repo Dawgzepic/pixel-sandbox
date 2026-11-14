@@ -90,6 +90,39 @@ describe('movement', () => {
     }
     expect(escaped).toBe(false);
   });
+
+  it('holds water in a thin diagonal glass cup', () => {
+    const world = sim(28, 36);
+    const y = world.h - 2;
+    for (let x = 8; x <= 16; x++) world.setCell(x, y, El.Glass);
+    const left = [8, 7, 6, 5, 4];
+    const right = [16, 17, 18, 19, 20];
+    for (let i = 0; i < left.length; i++) {
+      world.setCell(left[i], y - 1 - i, El.Glass);
+      world.setCell(right[i], y - 1 - i, El.Glass);
+    }
+    let poured = 0;
+    for (let i = 0; i < left.length - 1; i++) {
+      const row = y - 1 - i;
+      for (let x = left[i] + 1; x < right[i]; x++) {
+        world.setCell(x, row, El.Water);
+        poured++;
+      }
+    }
+    for (let n = 0; n < 80; n++) world.step();
+    expect(world.count(El.Water)).toBe(poured);
+    for (let row = 1; row < world.h - 1; row++) {
+      for (let x = 1; x < world.w - 1; x++) {
+        if (world.get(x, row) !== El.Water) continue;
+        const aboveFloor = y - row;
+        expect(aboveFloor).toBeGreaterThan(0);
+        expect(aboveFloor).toBeLessThanOrEqual(left.length);
+        const step = aboveFloor - 1;
+        expect(x).toBeGreaterThan(left[step]);
+        expect(x).toBeLessThan(right[step]);
+      }
+    }
+  });
 });
 
 describe('reactions', () => {
