@@ -265,10 +265,6 @@ function phase(sim: Simulation): void {
             boilOffSalt(sim, x, y);
             continue;
           }
-          if (t === El.Saltwater && tp < -8) {
-            sim.setCell(x, y, El.Ice, { temp: -8, origin: 'system' });
-            continue;
-          }
           for (const rule of PHASE_RULES) {
             if (rule.from !== t) continue;
             const hit = rule.op === '>' ? tp > rule.temp : tp < rule.temp;

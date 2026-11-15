@@ -113,7 +113,7 @@ describe('rust', () => {
   });
 
   it('crumbles solid rust into powder that falls', () => {
-    const hold = TUNING.rustStride * TUNING.crumbleTicks;
+    const hold = TUNING.crumbleStride * TUNING.crumbleTicks;
     const world = sim();
     const y = world.h - 2;
     box(world, 6, y);

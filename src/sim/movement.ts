@@ -1,3 +1,4 @@
+import { brushCells } from '../brush';
 import { DENSITY, El, findPair, FLAMMABLE, IS_GAS, IS_LIQUID, IS_SOLID, MOVABLE } from './elements';
 import type { Simulation } from './simulation';
 
@@ -49,8 +50,18 @@ function moveCell(sim: Simulation, x: number, y: number): void {
     moveGas(sim, x, y);
     return;
   }
+  if (t === El.RustPowder) {
+    if (shove(sim, x, y)) return;
+    moveClump(sim, x, y);
+    return;
+  }
   if (shove(sim, x, y)) return;
   moveFall(sim, x, y, t);
+}
+
+/** Rust powder falls straight down and stays in steep clumps instead of trickling like sand. */
+function moveClump(sim: Simulation, x: number, y: number): void {
+  tryEnter(sim, x, y, x, y + 1, DENSITY[El.RustPowder], false);
 }
 
 function shove(sim: Simulation, x: number, y: number): boolean {
@@ -239,5 +250,90 @@ function quench(sim: Simulation, x: number, y: number, nx: number, ny: number): 
   sim.visited[sim.idx(x, y)] = 1;
   sim.visited[sim.idx(nx, ny)] = 1;
   return true;
+}
+
+/** Stir loose material along a drag. Solids, including glass and wood, stay put. */
+export function handMix(
+  sim: Simulation,
+  cx: number,
+  cy: number,
+  size: number,
+  shape: 'circle' | 'square',
+  dx: number,
+  dy: number,
+): void {
+  const sx = Math.sign(dx);
+  const sy = Math.sign(dy);
+  if (sx === 0 && sy === 0) return;
+  const cells = brushCells(cx, cy, size, shape);
+  cells.sort((a, b) => (b[0] - a[0]) * sx + (b[1] - a[1]) * sy);
+  for (const [x, y] of cells) {
+    if (!sim.inBounds(x, y) || sim.isBorder(x, y)) continue;
+    loosenRust(sim, x, y);
+    if (!handCarries(sim, x, y)) continue;
+    const nx = x + sx;
+    const ny = y + sy;
+    if (cornerSealed(sim, x, y, nx, ny)) continue;
+    if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+    const dest = sim.get(nx, ny);
+    if (dest !== El.Empty && (dest === El.Rust || IS_SOLID[dest] === 1)) continue;
+    sim.swap(x, y, nx, ny);
+    sim.addImpulse(nx, ny, sx * 3, sy * 3);
+  }
+}
+
+/** Pick up loose cells under the brush and carry them by one step. */
+export function handDrag(
+  sim: Simulation,
+  cx: number,
+  cy: number,
+  size: number,
+  shape: 'circle' | 'square',
+  dx: number,
+  dy: number,
+): void {
+  const sx = Math.sign(dx);
+  const sy = Math.sign(dy);
+  if (sx === 0 && sy === 0) return;
+  const sources = brushCells(cx - sx, cy - sy, size, shape);
+  const cargo: Array<{ x: number; y: number; nx: number; ny: number; type: number; temp: number; aux: number; aux2: number; variation: number }> = [];
+  for (const [x, y] of sources) {
+    if (!sim.inBounds(x, y) || sim.isBorder(x, y)) continue;
+    loosenRust(sim, x, y);
+    if (!handCarries(sim, x, y)) continue;
+    const i = sim.idx(x, y);
+    cargo.push({
+      x, y, nx: x + sx, ny: y + sy,
+      type: sim.type[i], temp: sim.temp[i], aux: sim.aux[i], aux2: sim.aux2[i], variation: sim.variation[i],
+    });
+    sim.setCell(x, y, El.Empty, { origin: 'system' });
+  }
+  cargo.sort((a, b) => (b.nx - a.nx) * sx + (b.ny - a.ny) * sy);
+  for (const bit of cargo) {
+    const spot = placeSpot(sim, bit.nx, bit.ny) ?? placeSpot(sim, bit.x, bit.y);
+    if (!spot) continue;
+    sim.setCell(spot.x, spot.y, bit.type, {
+      temp: bit.temp, aux: bit.aux, aux2: bit.aux2, variation: bit.variation, origin: 'system',
+    });
+  }
+}
+
+function loosenRust(sim: Simulation, x: number, y: number): void {
+  if (sim.get(x, y) === El.Rust) sim.setCell(x, y, El.RustPowder, { origin: 'system' });
+}
+
+function handCarries(sim: Simulation, x: number, y: number): boolean {
+  const t = sim.get(x, y);
+  if (t === El.Empty || t === El.Rust) return false;
+  return IS_SOLID[t] !== 1;
+}
+
+function placeSpot(sim: Simulation, x: number, y: number): { x: number; y: number } | null {
+  const spots: Array<[number, number]> = [[x, y], [x, y + 1], [x - 1, y], [x + 1, y], [x, y - 1]];
+  for (const [sx, sy] of spots) {
+    if (!sim.inBounds(sx, sy) || sim.isBorder(sx, sy)) continue;
+    if (sim.get(sx, sy) === El.Empty) return { x: sx, y: sy };
+  }
+  return null;
 }
 

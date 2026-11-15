@@ -226,8 +226,10 @@ export class Simulation {
   /** Cooler brush. Empty air is left alone. */
   cool(x: number, y: number): void {
     if (!this.inBounds(x, y) || this.isBorder(x, y)) return;
-    if (this.type[this.idx(x, y)] === El.Empty) return;
-    this.addHeat(x, y, -TUNING.cooler);
+    const t = this.type[this.idx(x, y)];
+    if (t === El.Empty) return;
+    const molten = t === El.Lava || t === El.Molten || t === El.MoltenGlass;
+    this.addHeat(x, y, molten ? -TUNING.coolerMolten : -TUNING.cooler);
   }
 
   private heatGain(x: number, y: number, requested: number): number {

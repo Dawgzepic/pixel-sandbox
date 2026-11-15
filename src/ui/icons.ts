@@ -4,15 +4,17 @@ export type ToolName =
   | 'Eraser'
   | 'Warmer'
   | 'Cooler'
+  | 'Hand'
   | 'Water'
   | 'Saltwater'
   | 'Salt'
   | 'Rust powder'
+  | 'Ash'
   | 'Glass'
   | 'Rust'
+  | 'Wood'
   | 'Molten glass'
   | 'Fire'
-  | 'Smoke'
   | 'Metal'
   | 'Molten metal'
   | 'Ice'
@@ -36,6 +38,7 @@ export function iconCanvas(name: string): HTMLCanvasElement {
   if (name === 'Eraser') drawEraser(ctx);
   else if (name === 'Warmer') drawWarmer(ctx);
   else if (name === 'Cooler') drawCooler(ctx);
+  else if (name === 'Hand') drawHand(ctx);
   else drawElement(ctx, name);
   cache.set(name, canvas);
   return canvas;
@@ -103,6 +106,13 @@ function drawWarmer(ctx: CanvasRenderingContext2D): void {
   ctx.fillRect(7, 7, 2, 2);
 }
 
+function drawHand(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = '#ffe6a8';
+  ctx.fillRect(7, 3, 2, 6);
+  ctx.fillRect(5, 6, 6, 3);
+  ctx.fillRect(6, 9, 4, 3);
+}
+
 function drawCooler(ctx: CanvasRenderingContext2D): void {
   ctx.fillStyle = '#9ad7ff';
   ctx.fillRect(7, 3, 2, 2);
@@ -124,20 +134,21 @@ export const GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
     label: 'Liquids',
     items: [item('Water'), item('Saltwater')],
   },
-  { label: 'Powders', items: [item('Salt'), item('Rust powder')] },
-  { label: 'Solids', items: [item('Stone'), item('Glass'), item('Metal'), item('Rust'), item('Ice')] },
-  { label: 'Heat', items: [item('Fire'), item('Lava'), item('Molten metal'), item('Molten glass'), item('Steam'), item('Smoke')] },
+  { label: 'Powders', items: [item('Salt'), item('Rust powder'), item('Ash')] },
+  { label: 'Solids', items: [item('Stone'), item('Glass'), item('Metal'), item('Rust'), item('Wood'), item('Ice')] },
+  { label: 'Heat', items: [item('Fire'), item('Lava'), item('Molten metal'), item('Molten glass'), item('Steam')] },
   {
     label: 'Tools',
     items: [
-      { name: 'Warmer', label: 'Warmer', blurb: 'Heats whatever is already there. Hold it to boil water. It does not melt glass.' },
-      { name: 'Cooler', label: 'Cooler', blurb: 'Cools whatever is already there. Hold it to freeze water into ice.' },
+      { name: 'Hand', label: 'Hand', blurb: 'Mix stirs loose material. Drag carries it. Glass, stone, metal, ice, and wood stay put.' },
+      { name: 'Warmer', label: 'Warmer', blurb: 'Heats whatever is already there. Hold it to boil water or light wood. It does not melt glass.' },
+      { name: 'Cooler', label: 'Cooler', blurb: 'Cools whatever is already there. Freezes water, and solidifies lava and molten metal or glass.' },
       { name: 'Eraser', label: 'Eraser', blurb: 'Removes elements. The outline shows the brush.' },
     ],
   },
 ];
 
-export const OUTLINE_TOOLS: ReadonlySet<ToolName> = new Set(['Eraser', 'Warmer', 'Cooler']);
+export const OUTLINE_TOOLS: ReadonlySet<ToolName> = new Set(['Eraser', 'Warmer', 'Cooler', 'Hand']);
 
 export const QUICK: ToolName[] = [
   'Water',

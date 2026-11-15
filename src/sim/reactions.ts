@@ -28,6 +28,7 @@ export function stepReactions(sim: Simulation): void {
           else if (t === El.Metal) rustMetal(sim, x, y);
           else if (t === El.Rust) crumbleRust(sim, x, y);
           else if (t === El.Fire) tintSodium(sim, x, y);
+          else if (t === El.Timber) burnWood(sim, x, y);
         }
       }
     }
@@ -117,20 +118,70 @@ function soakGlass(sim: Simulation, x: number, y: number): void {
   }
 }
 
-/** Saltwater eats metal into solid rust, then that rust crumbles. Fresh water does not. */
+/**
+ * Saltwater pits metal from the wet surface. The damage creeps inward in sparse
+ * branches and stops after rustDepth pixels, so the inside of a thick bar stays metal.
+ */
 function rustMetal(sim: Simulation, x: number, y: number): void {
-  const soaked = soakContact(sim, x, y, El.Saltwater, TUNING.rustStride);
+  const depth = saltwaterDepth(sim, x, y);
+  if (depth < 1 || depth > TUNING.rustDepth || !rustPitContinues(x, y, depth)) {
+    sim.aux[sim.idx(x, y)] = 0;
+    sim.aux2[sim.idx(x, y)] = 0;
+    return;
+  }
+  if (depth > 1 && !neighborIs(sim, x, y, El.Rust) && !neighborIs(sim, x, y, El.RustPowder)) {
+    sim.aux[sim.idx(x, y)] = 0;
+    sim.aux2[sim.idx(x, y)] = 0;
+    return;
+  }
+  const soaked = soakContact(sim, x, y, El.Saltwater, TUNING.rustStride, true);
   if (soaked >= TUNING.rustTicks) sim.setCell(x, y, El.Rust, { temp: 20, origin: 'system' });
 }
 
+/** Distance through metal or rust to the nearest saltwater, or 0 when none is close. */
+export function saltwaterDepth(sim: Simulation, x: number, y: number): number {
+  const seen = new Uint8Array(sim.w * sim.h);
+  const queue: Array<[number, number, number]> = [[x, y, 0]];
+  seen[sim.idx(x, y)] = 1;
+  let head = 0;
+  while (head < queue.length) {
+    const [cx, cy, dist] = queue[head++];
+    if (dist >= TUNING.rustDepth) continue;
+    for (let k = 0; k < 4; k++) {
+      const nx = cx + DX[k];
+      const ny = cy + DY[k];
+      if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+      const j = sim.idx(nx, ny);
+      const nt = sim.type[j];
+      if (nt === El.Saltwater) return dist + 1;
+      if (seen[j]) continue;
+      if (nt !== El.Metal && nt !== El.Rust && nt !== El.RustPowder) continue;
+      seen[j] = 1;
+      queue.push([nx, ny, dist + 1]);
+    }
+  }
+  return 0;
+}
+
+/** Surface metal always pits. A few columns keep creeping inward, and only some reach the full depth. */
+export function rustPitContinues(x: number, _y: number, depth: number): boolean {
+  if (depth <= 1) return true;
+  const branch = Math.abs((x * 13) % 7);
+  if (branch >= 3) return false;
+  if (depth >= 5) return branch === 0;
+  if (depth >= 4) return branch <= 1;
+  return true;
+}
+
 function crumbleRust(sim: Simulation, x: number, y: number): void {
-  const soaked = soakContact(sim, x, y, El.Saltwater, TUNING.rustStride);
+  const soaked = soakContact(sim, x, y, El.Saltwater, TUNING.crumbleStride);
   if (soaked >= TUNING.crumbleTicks) sim.setCell(x, y, El.RustPowder, { temp: 20, origin: 'system' });
 }
 
-function soakContact(sim: Simulation, x: number, y: number, neighbor: number, stride: number): number {
+function soakContact(sim: Simulation, x: number, y: number, neighbor: number, stride: number, wet = false): number {
   const i = sim.idx(x, y);
-  if (!neighborIs(sim, x, y, neighbor)) {
+  // Root pits stay damp through the metal; only the surface has to touch saltwater.
+  if (!wet && !neighborIs(sim, x, y, neighbor)) {
     sim.aux[i] = 0;
     sim.aux2[i] = 0;
     return 0;
@@ -157,4 +208,54 @@ function tintSodium(sim: Simulation, x: number, y: number): void {
   if (sim.variation[i] < 16) return;
   sim.variation[i]--;
   sim.markVisual(x, y);
+}
+
+/** Lit wood keeps burning, spreads slowly, smokes, then becomes ash. Water puts it out. */
+function burnWood(sim: Simulation, x: number, y: number): void {
+  const i = sim.idx(x, y);
+  if (neighborIs(sim, x, y, El.Water)) {
+    if (sim.aux[i] !== 0) {
+      sim.aux[i] = 0;
+      sim.aux2[i] = 0;
+      sim.setTemp(x, y, 40);
+    }
+    return;
+  }
+  const hot = sim.getTemp(x, y) >= TUNING.woodIgnite
+    || neighborIs(sim, x, y, El.Fire)
+    || neighborIs(sim, x, y, El.Lava);
+  if (sim.aux[i] === 0) {
+    if (!hot) return;
+    sim.aux[i] = TUNING.woodBurn;
+    sim.setTemp(x, y, 460);
+    return;
+  }
+  sim.aux[i]--;
+  sim.setTemp(x, y, Math.max(sim.getTemp(x, y), 420));
+  if (sim.aux[i] === 0) {
+    sim.setCell(x, y, El.Ash, { temp: 80, origin: 'system' });
+    return;
+  }
+  const up = y - 1;
+  if (sim.inBounds(x, up) && !sim.isBorder(x, up) && sim.get(x, up) === El.Empty && sim.rng.next() < 0.45) {
+    if (sim.rng.next() < 0.55) {
+      sim.setCell(x, up, El.Smoke, { temp: 70, aux: 28 + sim.rng.int(16), origin: 'system' });
+    } else {
+      sim.setCell(x, up, El.Fire, { temp: 520, aux: 16 + sim.rng.int(10), origin: 'system' });
+    }
+  }
+  sim.aux2[i]++;
+  if (sim.aux2[i] < TUNING.woodSpread) return;
+  sim.aux2[i] = 0;
+  for (let k = 0; k < 4; k++) {
+    const nx = x + DX[k];
+    const ny = y + DY[k];
+    if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+    const j = sim.idx(nx, ny);
+    if (sim.type[j] !== El.Timber || sim.aux[j] !== 0) continue;
+    sim.aux[j] = TUNING.woodBurn;
+    sim.setTemp(nx, ny, 460);
+    sim.wake(nx, ny);
+    return;
+  }
 }

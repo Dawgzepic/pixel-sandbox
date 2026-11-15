@@ -48,11 +48,13 @@ export const El = {
   Saltwater: 34,
   Rust: 35,
   RustPowder: 36,
+  Timber: 37,
+  Ash: 38,
 } as const;
 
 export type ElId = (typeof El)[keyof typeof El];
 
-export const ELEMENT_COUNT = 37;
+export const ELEMENT_COUNT = 39;
 
 export type ElementState = 'empty' | 'powder' | 'liquid' | 'gas' | 'solid' | 'fire' | 'foam';
 
@@ -178,8 +180,8 @@ export const DEFS: ElementDef[] = [
   retired(El.Wall, 'Wall'),
   {
     id: El.Smoke, name: 'Smoke', category: 'fire',
-    blurb: 'Billows, drifts, and fades. Flames leave it behind.',
-    color: [150, 146, 156], variance: 18, state: 'gas', density: 0.18,
+    blurb: 'Dark smoke. It rises from a flame and fades.',
+    color: [58, 58, 62], variance: 8, state: 'gas', density: 0.18,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.08, defaultTemp: 60, alwaysActive: true,
     glow: 0, voidImmune: false, conductive: false,
@@ -242,9 +244,25 @@ export const DEFS: ElementDef[] = [
   {
     id: El.RustPowder, name: 'Rust powder', formula: 'Fe2O3', category: 'powder',
     blurb: 'Crumpled rust. It falls and piles up.',
-    color: [196, 112, 48], variance: 16, state: 'powder', density: 1.6,
+    color: [196, 112, 48], variance: 16, state: 'powder', density: 1.8,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.2, defaultTemp: 20, alwaysActive: false,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Timber, name: 'Wood', formula: 'C6H10O5', category: 'solid',
+    blurb: 'Cellulose. Once lit, it burns on its own, smokes, then leaves ash. Water puts it out.',
+    color: [146, 96, 48], variance: 16, state: 'solid', density: 8,
+    movable: false, solid: true, displaceable: false, flammable: true,
+    acidResist: 0, heatConduct: 0.22, defaultTemp: 20, alwaysActive: false,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Ash, name: 'Ash', formula: 'K2CO3', category: 'powder',
+    blurb: 'Fine mineral powder left after wood burns. It falls and piles.',
+    color: [186, 184, 176], variance: 10, state: 'powder', density: 0.7,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.12, defaultTemp: 30, alwaysActive: false,
     glow: 0, voidImmune: false, conductive: false,
   },
 ];

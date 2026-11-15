@@ -27,8 +27,20 @@ export const TUNING = {
   rustStride: 2,
   /** Rust steps before metal becomes solid rust. With the stride, a little past the glass melt. */
   rustTicks: 255,
-  /** Further saltwater contact before solid rust crumbles into powder. */
-  crumbleTicks: 80,
+  /** Further saltwater contact before solid rust crumbles. Long enough for pitting to creep. */
+  crumbleTicks: 255,
+  /** Steps between crumble counts, so roots can reach several pixels before the crust falls off. */
+  crumbleStride: 8,
+  /** How far saltwater pitting may creep into metal, in pixels. */
+  rustDepth: 5,
+  /** Wood keeps burning on its own for this many steps, then becomes ash. */
+  woodBurn: 240,
+  /** Burning wood waits this many steps before lighting a neighbor. */
+  woodSpread: 14,
+  /** Warmer or a hot neighbor lights wood once it passes this temperature. */
+  woodIgnite: 280,
+  /** Cooler drop applied to lava and molten material so a hold can solidify it. */
+  coolerMolten: 90,
   /** Warmer brush. Boils water after a short hold, not in one tap. */
   warmer: 16,
   /** Cooler brush. Freezes water only after the temperature is held down. */

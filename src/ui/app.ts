@@ -1,4 +1,5 @@
 import { brushCells, bresenham, sprayCells, type BrushShape } from '../brush';
+import { handDrag, handMix } from '../sim/movement';
 import { Sfx } from '../audio/sfx';
 import { El, elementByName } from '../sim/elements';
 import { buildDemo } from '../sim/demo';
@@ -73,6 +74,8 @@ export function mountGame(root: HTMLElement): SandboxApi {
     shape: 'circle' as BrushShape,
     size: 3,
     tool: 'Water' as ToolName,
+    hand: false,
+    handMode: 'mix' as 'mix' | 'drag',
     clearArmed: false,
     sheet: '' as '' | 'picker' | 'menu',
     pointers: new Map<number, PointerPoint>(),
@@ -80,7 +83,6 @@ export function mountGame(root: HTMLElement): SandboxApi {
     lineAnchor: null as { x: number; y: number } | null,
     lastCell: null as { x: number; y: number } | null,
     cursor: null as { x: number; y: number } | null,
-    hand: false,
     spaceDown: false,
     gesture: null as Gesture | null,
     zoom: 2.15,
@@ -214,6 +216,7 @@ interface Shell {
   size: HTMLButtonElement;
   sizeMenu: HTMLElement;
   hand: HTMLButtonElement;
+  stir: HTMLButtonElement;
   shape: HTMLButtonElement;
   all: HTMLButtonElement;
   quick: HTMLElement;
@@ -263,9 +266,12 @@ function buildShell(root: HTMLElement, canvas: HTMLCanvasElement): Shell {
   sizeWrap.append(size, sizeMenu);
   const hand = button('HAND', 'hand');
   hand.setAttribute('aria-pressed', 'false');
+  const stir = button('MIX', 'hand-tool');
+  stir.dataset.tool = 'Hand';
+  stir.setAttribute('aria-label', 'Hand');
   const shape = button('CIRCLE', 'brush-shape');
   const all = button('ALL', 'all-elements');
-  brushRow.append(sizeWrap, hand, shape, all);
+  brushRow.append(sizeWrap, hand, stir, shape, all);
   const quick = el('div', 'quick');
   dock.append(brushRow, quick);
   const sheet = el('div', 'sheet');
@@ -276,7 +282,7 @@ function buildShell(root: HTMLElement, canvas: HTMLCanvasElement): Shell {
   install.hidden = true;
   app.append(main, dock, sheet, toast);
   root.append(app);
-  return { fps, status, play, step, speed, sound, menu, controls, size, sizeMenu, hand, shape, all, quick, sheet, install, toast };
+  return { fps, status, play, step, speed, sound, menu, controls, size, sizeMenu, hand, stir, shape, all, quick, sheet, install, toast };
 }
 
 function wireControls(state: GameState): void {
@@ -343,6 +349,13 @@ function wireControls(state: GameState): void {
     ui.hand.setAttribute('aria-pressed', state.hand ? 'true' : 'false');
     state.sfx.play('ui');
   });
+  ui.stir.addEventListener('click', () => {
+    state.sfx.resume();
+    state.sfx.play('ui');
+    if (state.tool === 'Hand') state.handMode = state.handMode === 'mix' ? 'drag' : 'mix';
+    else selectTool(state, 'Hand');
+    syncHand(state);
+  });
   ui.shape.addEventListener('click', () => {
     state.sfx.play('ui');
     const order: BrushShape[] = ['circle', 'square', 'line', 'spray'];
@@ -380,6 +393,7 @@ type GameState = {
   shape: BrushShape;
   size: number;
   hand: boolean;
+  handMode: 'mix' | 'drag';
   spaceDown: boolean;
   gesture: Gesture | null;
   tool: ToolName;
@@ -412,6 +426,13 @@ function selectTool(state: GameState, name: string): void {
   for (const node of state.ui.quick.querySelectorAll('button')) {
     node.classList.toggle('selected', node.dataset.tool === item.name);
   }
+  syncHand(state);
+}
+
+function syncHand(state: GameState): void {
+  state.ui.stir.textContent = state.handMode === 'mix' ? 'MIX' : 'DRAG';
+  state.ui.stir.classList.toggle('selected', state.tool === 'Hand');
+  state.ui.stir.setAttribute('aria-pressed', state.tool === 'Hand' ? 'true' : 'false');
 }
 
 function syncBrush(state: GameState): void {
@@ -554,6 +575,10 @@ function onPointerDown(state: GameState, event: PointerEvent): void {
   state.lastCell = null;
   const cell = cellFromClient(state, event.clientX, event.clientY);
   if (!cell) return;
+  if (state.tool === 'Hand') {
+    state.lastCell = cell;
+    return;
+  }
   if (state.shape === 'line' && isElementTool(state.tool)) {
     state.lineAnchor = cell;
     return;
@@ -580,7 +605,16 @@ function onPointerMove(state: GameState, event: PointerEvent): void {
   const cell = cellFromClient(state, event.clientX, event.clientY);
   if (!cell) return;
   const last = state.lastCell;
-  if (last) {
+  if (state.tool === 'Hand' && last) {
+    let px = last.x;
+    let py = last.y;
+    for (const [x, y] of bresenham(last.x, last.y, cell.x, cell.y)) {
+      if (x === px && y === py) continue;
+      applyHand(state, x, y, x - px, y - py);
+      px = x;
+      py = y;
+    }
+  } else if (last) {
     for (const [x, y] of bresenham(last.x, last.y, cell.x, cell.y)) stamp(state, x, y);
   } else stamp(state, cell.x, cell.y);
   state.lastCell = cell;
@@ -614,6 +648,12 @@ function holdBrush(state: GameState): void {
     else if (state.tool === 'Warmer') state.sim.warm(cx, cy);
     else state.sim.cool(cx, cy);
   }
+}
+
+function applyHand(state: GameState, x: number, y: number, dx: number, dy: number): void {
+  const shape = state.shape === 'square' ? 'square' : 'circle';
+  if (state.handMode === 'drag') handDrag(state.sim, x, y, state.size, shape, dx, dy);
+  else handMix(state.sim, x, y, state.size, shape, dx, dy);
 }
 
 function stamp(state: GameState, x: number, y: number): void {
@@ -871,7 +911,7 @@ function toolButton(name: ToolName): HTMLButtonElement {
 }
 
 function isElementTool(name: ToolName): boolean {
-  return name !== 'Eraser' && name !== 'Warmer' && name !== 'Cooler';
+  return name !== 'Eraser' && name !== 'Warmer' && name !== 'Cooler' && name !== 'Hand';
 }
 
 function rememberCursor(state: GameState, event: PointerEvent): void {

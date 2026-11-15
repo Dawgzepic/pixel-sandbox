@@ -200,10 +200,10 @@ export class Renderer {
         b = 16 + (flick & 3) * 14;
       }
     } else if (t === El.Smoke) {
-      const puff = 90 + (sim.aux[i] % 28) + ((x + y + sim.frame) & 3) * 6;
+      const puff = 42 + (sim.aux[i] % 18);
       r = puff;
-      g = puff - 4;
-      b = puff + 6;
+      g = puff;
+      b = puff + 4;
     } else if (t === El.Stone) {
       const heat = Math.max(0, Math.min(1, (sim.temp[i] - 40) / 460));
       r = 118 + (255 - 118) * heat;

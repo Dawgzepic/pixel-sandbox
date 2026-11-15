@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test';
 import { El, elementByName } from '../src/sim/elements';
 
 const MATERIALS = [
-  'Water', 'Salt', 'Saltwater', 'Glass', 'Rust', 'Rust powder',
-  'Fire', 'Smoke', 'Metal', 'Molten metal', 'Molten glass', 'Ice', 'Steam', 'Lava', 'Stone',
+  'Water', 'Salt', 'Saltwater', 'Glass', 'Rust', 'Rust powder', 'Wood', 'Ash',
+  'Fire', 'Metal', 'Molten metal', 'Molten glass', 'Ice', 'Steam', 'Lava', 'Stone',
 ] as const;
 
 test.beforeEach(async ({ page }) => {
@@ -35,6 +35,10 @@ test('phone screen shows the sandbox, picker, and temperature', async ({ page })
   await expect(page.locator('.sheet').getByRole('button', { name: 'Warmer' })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Cooler' })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Lava' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Wood (C6H10O5)' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Ash (K2CO3)' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Smoke' })).toHaveCount(0);
+  await expect(page.locator('[data-testid="hand-tool"]')).toBeVisible();
   await expect(page.getByRole('button', { name: 'GOALS' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'HEAT' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Wall' })).toHaveCount(0);
