@@ -119,23 +119,29 @@ function soakGlass(sim: Simulation, x: number, y: number): void {
 }
 
 /**
- * Saltwater pits metal from the wet surface. The damage creeps inward in sparse
- * branches and stops after rustDepth pixels, so the inside of a thick bar stays metal.
+ * Saltwater pits metal from the wet surface. Each cell decides from its own
+ * variation whether a pit starts there, how deep it may pass, and whether it
+ * may widen sideways. Nothing about the choice depends on x, y, or scan order.
+ * The creep stops after rustDepth pixels, so the inside of a thick bar stays metal.
  */
 function rustMetal(sim: Simulation, x: number, y: number): void {
   const depth = saltwaterDepth(sim, x, y);
-  if (depth < 1 || depth > TUNING.rustDepth || !rustPitContinues(x, y, depth)) {
-    sim.aux[sim.idx(x, y)] = 0;
-    sim.aux2[sim.idx(x, y)] = 0;
-    return;
-  }
-  if (depth > 1 && !neighborIs(sim, x, y, El.Rust) && !neighborIs(sim, x, y, El.RustPowder)) {
+  const vertical = rustAt(sim, x, y - 1) || rustAt(sim, x, y + 1);
+  const horizontal = rustAt(sim, x - 1, y) || rustAt(sim, x + 1, y);
+  const sideOnly = horizontal && !vertical;
+  if (!rustCellAllows(sim.variation[sim.idx(x, y)], depth, vertical, sideOnly)) {
     sim.aux[sim.idx(x, y)] = 0;
     sim.aux2[sim.idx(x, y)] = 0;
     return;
   }
   const soaked = soakContact(sim, x, y, El.Saltwater, TUNING.rustStride, true);
   if (soaked >= TUNING.rustTicks) sim.setCell(x, y, El.Rust, { temp: 20, origin: 'system' });
+}
+
+function rustAt(sim: Simulation, x: number, y: number): boolean {
+  if (!sim.inBounds(x, y) || sim.isBorder(x, y)) return false;
+  const t = sim.type[sim.idx(x, y)];
+  return t === El.Rust || t === El.RustPowder;
 }
 
 /** Distance through metal or rust to the nearest saltwater, or 0 when none is close. */
@@ -163,14 +169,25 @@ export function saltwaterDepth(sim: Simulation, x: number, y: number): number {
   return 0;
 }
 
-/** Surface metal always pits. A few columns keep creeping inward, and only some reach the full depth. */
-export function rustPitContinues(x: number, _y: number, depth: number): boolean {
-  if (depth <= 1) return true;
-  const branch = Math.abs((x * 13) % 7);
-  if (branch >= 3) return false;
-  if (depth >= 5) return branch === 0;
-  if (depth >= 4) return branch <= 1;
-  return true;
+/**
+ * Whether this metal cell may join a rust pit.
+ * Depth 1 nucleates only some cells, so the wet face is not a solid crust.
+ * Deeper cells continue only as far as their own roll allows, and a sideways
+ * step is rarer than following a pit that is already above or below.
+ * Coordinates are not an input, so the same variation does the same thing anywhere.
+ */
+export function rustCellAllows(
+  variation: number,
+  depth: number,
+  verticalPit: boolean,
+  sideOnly: boolean,
+): boolean {
+  if (depth < 1 || depth > TUNING.rustDepth) return false;
+  const roll = variation & 15;
+  if (depth === 1) return roll % 3 === 0;
+  if (depth > 1 + (roll % 5)) return false;
+  if (sideOnly) return (roll & 3) === 0;
+  return verticalPit;
 }
 
 function crumbleRust(sim: Simulation, x: number, y: number): void {
@@ -210,32 +227,41 @@ function tintSodium(sim: Simulation, x: number, y: number): void {
   sim.markVisual(x, y);
 }
 
+function neighborBurningWood(sim: Simulation, x: number, y: number): boolean {
+  for (let k = 0; k < 4; k++) {
+    const nx = x + DX[k];
+    const ny = y + DY[k];
+    if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+    const j = sim.idx(nx, ny);
+    if (sim.type[j] === El.Timber && sim.aux2[j] > 0) return true;
+  }
+  return false;
+}
+
 /** Lit wood keeps burning, spreads slowly, smokes, then becomes ash. Water puts it out. */
 function burnWood(sim: Simulation, x: number, y: number): void {
   const i = sim.idx(x, y);
   if (neighborIs(sim, x, y, El.Water)) {
-    if (sim.aux[i] !== 0) {
+    if (sim.aux[i] !== 0 || sim.aux2[i] !== 0) {
       sim.aux[i] = 0;
       sim.aux2[i] = 0;
       sim.setTemp(x, y, 40);
     }
     return;
   }
-  const hot = sim.getTemp(x, y) >= TUNING.woodIgnite
-    || neighborIs(sim, x, y, El.Fire)
-    || neighborIs(sim, x, y, El.Lava);
-  if (sim.aux[i] === 0) {
-    if (!hot) return;
-    sim.aux[i] = TUNING.woodBurn;
+  // A flame or the Warmer lights a piece immediately. Heat leaking out of a
+  // piece that is already burning does not. That neighbor waits for the spread timer,
+  // or a short burn would pass the flame along as fast as conduction.
+  if (sim.aux2[i] === 0) {
+    const flame = neighborIs(sim, x, y, El.Fire) || neighborIs(sim, x, y, El.Lava);
+    const warmed = sim.getTemp(x, y) >= TUNING.woodIgnite && !neighborBurningWood(sim, x, y);
+    if (!flame && !warmed) return;
+    sim.aux2[i] = TUNING.woodBurnTicks;
+    sim.aux[i] = 0;
     sim.setTemp(x, y, 460);
     return;
   }
-  sim.aux[i]--;
   sim.setTemp(x, y, Math.max(sim.getTemp(x, y), 420));
-  if (sim.aux[i] === 0) {
-    sim.setCell(x, y, El.Ash, { temp: 80, origin: 'system' });
-    return;
-  }
   const up = y - 1;
   if (sim.inBounds(x, up) && !sim.isBorder(x, up) && sim.get(x, up) === El.Empty && sim.rng.next() < 0.45) {
     if (sim.rng.next() < 0.55) {
@@ -244,16 +270,26 @@ function burnWood(sim: Simulation, x: number, y: number): void {
       sim.setCell(x, up, El.Fire, { temp: 520, aux: 16 + sim.rng.int(10), origin: 'system' });
     }
   }
-  sim.aux2[i]++;
-  if (sim.aux2[i] < TUNING.woodSpread) return;
-  sim.aux2[i] = 0;
+  const tick = sim.aux[i] + 1;
+  if (tick < TUNING.woodBurnStride) {
+    sim.aux[i] = tick;
+    return;
+  }
+  sim.aux[i] = 0;
+  sim.aux2[i]--;
+  if (sim.aux2[i] === 0) {
+    sim.setCell(x, y, El.Ash, { temp: 80, origin: 'system' });
+    return;
+  }
+  if (sim.aux2[i] % TUNING.woodSpreadTicks !== 0) return;
   for (let k = 0; k < 4; k++) {
     const nx = x + DX[k];
     const ny = y + DY[k];
     if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
     const j = sim.idx(nx, ny);
-    if (sim.type[j] !== El.Timber || sim.aux[j] !== 0) continue;
-    sim.aux[j] = TUNING.woodBurn;
+    if (sim.type[j] !== El.Timber || sim.aux2[j] !== 0) continue;
+    sim.aux2[j] = TUNING.woodBurnTicks;
+    sim.aux[j] = 0;
     sim.setTemp(nx, ny, 460);
     sim.wake(nx, ny);
     return;

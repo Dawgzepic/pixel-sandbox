@@ -1,5 +1,5 @@
 import { brushCells } from '../brush';
-import { DENSITY, El, findPair, FLAMMABLE, IS_GAS, IS_LIQUID, IS_SOLID, MOVABLE } from './elements';
+import { DENSITY, El, findPair, FLAMMABLE, IS_GAS, IS_LIQUID, IS_POWDER, IS_SOLID, MOVABLE } from './elements';
 import type { Simulation } from './simulation';
 
 const DX = [0, 0, -1, 1];
@@ -212,9 +212,63 @@ function tryEnter(
     return true;
   }
   if (!MOVABLE[dt]) return false;
-  if (rising ? DENSITY[dt] > density : DENSITY[dt] < density) {
-    sim.swap(x, y, nx, ny);
-    return true;
+  // The cell already moved this frame. Swapping with it again is what walked a
+  // single pile grain up a whole falling column in one pass, then left it to
+  // be smeared sideways. Each cell moves at most once.
+  if (sim.visited[dest]) return false;
+  const destDensity = DENSITY[dt];
+  if (rising) {
+    if (destDensity > density) {
+      sim.swap(x, y, nx, ny);
+      return true;
+    }
+    return false;
+  }
+  if (destDensity >= density) return false;
+  // Powders stay in the pile. A heavier grain or liquid rests, spreads, or
+  // soaks into a gap. Swapping the powder upward is what flung it and smeared it.
+  if (IS_POWDER[dt]) return false;
+  // A lighter liquid would otherwise be written into this cell and then swapped
+  // upward again by the next grain in the column. Park it on the open surface
+  // when there is room, then move into the cell it left.
+  relocateLiquid(sim, nx, ny);
+  sim.swap(x, y, nx, ny);
+  return true;
+}
+
+/**
+ * Move a liquid out of the way to the nearest open surface, to the side of
+ * whatever is sinking through it. Stops at a wall so it cannot jump a dish.
+ */
+function relocateLiquid(sim: Simulation, x: number, y: number): boolean {
+  let top = y;
+  for (let i = 0; i < 16; i++) {
+    const above = top - 1;
+    if (!sim.inBounds(x, above) || sim.isBorder(x, above)) break;
+    if (IS_LIQUID[sim.type[sim.idx(x, above)]] !== 1) break;
+    top = above;
+  }
+  const dirs = (sim.frame & 1) === 0 ? [-1, 1] : [1, -1];
+  for (const dir of dirs) {
+    for (let dist = 1; dist <= 10; dist++) {
+      const sx = x + dir * dist;
+      if (!sim.inBounds(sx, top) || sim.isBorder(sx, top)) break;
+      const side = sim.idx(sx, top);
+      if (sim.bodyBlock[side]) break;
+      const st = sim.type[side];
+      if (st === El.Empty) {
+        sim.swap(x, y, sx, top);
+        return true;
+      }
+      if (IS_LIQUID[st] !== 1) break;
+      const up = top - 1;
+      if (!sim.inBounds(sx, up) || sim.isBorder(sx, up)) continue;
+      const upi = sim.idx(sx, up);
+      if (sim.bodyBlock[upi] || sim.type[upi] !== El.Empty) continue;
+      if (Math.abs(sx - x) <= 1 && cornerSealed(sim, x, y, sx, up)) continue;
+      sim.swap(x, y, sx, up);
+      return true;
+    }
   }
   return false;
 }

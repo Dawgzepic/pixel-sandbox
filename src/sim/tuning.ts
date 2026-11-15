@@ -33,10 +33,15 @@ export const TUNING = {
   crumbleStride: 8,
   /** How far saltwater pitting may creep into metal, in pixels. */
   rustDepth: 5,
-  /** Wood keeps burning on its own for this many steps, then becomes ash. */
-  woodBurn: 240,
-  /** Burning wood waits this many steps before lighting a neighbor. */
-  woodSpread: 14,
+  /**
+   * A burning piece loses one tick of life every this many steps.
+   * Life itself is woodBurnTicks, so one piece lasts several times longer than a short flame.
+   */
+  woodBurnStride: 6,
+  /** Ticks of life in one piece of wood. Fits in a byte. With the stride, about six times a 240-step burn. */
+  woodBurnTicks: 240,
+  /** Life ticks between a burning piece lighting a neighboring piece. */
+  woodSpreadTicks: 16,
   /** Warmer or a hot neighbor lights wood once it passes this temperature. */
   woodIgnite: 280,
   /** Cooler drop applied to lava and molten material so a hold can solidify it. */

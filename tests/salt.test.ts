@@ -105,6 +105,7 @@ describe('rust', () => {
     const world = sim();
     box(world, 6, y);
     world.setCell(6, y, El.Metal);
+    world.variation[world.idx(6, y)] = 0;
     world.setCell(6, y - 1, El.Saltwater);
     for (let i = 0; i < 40; i++) world.step();
     expect(world.get(6, y)).toBe(El.Metal);
