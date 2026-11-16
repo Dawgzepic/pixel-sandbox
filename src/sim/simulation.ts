@@ -11,7 +11,7 @@ import { Rng } from './rng';
 import { stepElectricity } from './electricity';
 import { stepHeat } from './heat';
 import { stepMovement } from './movement';
-import { stepReactions } from './reactions';
+import { steamBlast, stepReactions } from './reactions';
 import { BUBBLE_TEMP, STEAM_TRAIL } from '../render/bubbles';
 import { AMBIENT, CHUNK, TUNING } from './tuning';
 
@@ -168,7 +168,7 @@ export class Simulation {
     }
     this.type[i] = el;
     this.temp[i] = opts?.temp !== undefined ? clampTemp(opts.temp) : DEFAULT_TEMP[el];
-    const aux = opts?.aux ?? (el === El.Fire ? TUNING.fireLife : 0);
+    const aux = opts?.aux ?? (el === El.Fire ? TUNING.fireLife : el === El.Salt ? TUNING.saltGrain : el === El.Saltwater ? TUNING.saltCap : 0);
     this.aux[i] = aux;
     this.aux2[i] = opts?.aux2 ?? 0;
     if (prev !== el) this.variation[i] = opts?.variation ?? this.rng.int(16);
@@ -185,6 +185,16 @@ export class Simulation {
     if (el === El.Fire && prev !== El.Empty && prev !== El.Fire) {
       this.userPaint[el]++;
       this.scorch(x, y);
+      return;
+    }
+    if ((el === El.Water || el === El.Saltwater) && (prev === El.Molten || prev === El.MoltenGlass)) {
+      this.userPaint[el]++;
+      steamBlast(this, x, y);
+      return;
+    }
+    if ((el === El.Molten || el === El.MoltenGlass) && (prev === El.Water || prev === El.Saltwater)) {
+      this.userPaint[el]++;
+      steamBlast(this, x, y);
       return;
     }
     if (el !== El.Empty && prev !== El.Empty && prev !== el) {

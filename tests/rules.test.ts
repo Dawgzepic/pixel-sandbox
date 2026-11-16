@@ -16,7 +16,7 @@ const LIVE = [
 
 describe('catalog', () => {
   it('keeps stable ids and shows formulas on the chemistry set', () => {
-    expect(DEFS).toHaveLength(39);
+    expect(DEFS).toHaveLength(40);
     for (let i = 0; i < DEFS.length; i++) expect(DEFS[i].id).toBe(i);
     expect(elementLabel(elementByName('Water')!)).toBe('Water (H2O)');
     expect(elementByName('Hydrochloric acid')).toBeUndefined();
@@ -27,6 +27,7 @@ describe('catalog', () => {
     expect(elementLabel(elementByName('Rust')!)).toBe('Rust (Fe2O3)');
     expect(elementByName('Hydrogen')).toBeUndefined();
     expect(elementLabel(elementByName('Glass')!)).toBe('Glass (SiO2)');
+    expect(elementLabel(elementByName('Glass shards')!)).toBe('Glass shards (SiO2)');
     expect(elementLabel(elementByName('Ice')!)).toBe('Ice (H2O)');
     expect(elementLabel(elementByName('Steam')!)).toBe('Steam (H2O)');
     expect(elementLabel(elementByName('Stone')!)).toBe('Stone');
@@ -196,22 +197,20 @@ describe('reactions', () => {
     const poured = sim();
     poured.setCell(5, 5, El.Molten);
     poured.paintUser(5, 5, El.Water);
-    expect(poured.get(5, 5)).toBe(El.Metal);
-    expect(poured.getTemp(5, 5)).toBeGreaterThan(80);
-    let steam = false;
-    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
-      if (poured.get(5 + dx, 5 + dy) === El.Steam) steam = true;
-    }
-    expect(steam).toBe(true);
+    expect(poured.get(5, 5)).toBe(El.Steam);
+    expect(poured.count(El.Molten) + poured.count(El.Metal)).toBeGreaterThan(0);
 
     const touch = sim();
     const y = touch.h - 2;
     touch.setCell(4, y, El.Molten);
     touch.setCell(5, y, El.Water);
+    touch.setCell(11, y, El.Stone);
+    touch.setCell(13, y, El.Stone);
+    touch.setCell(12, y, El.Molten);
     touch.step();
-    expect(touch.get(4, y)).toBe(El.Metal);
     expect(touch.count(El.Steam)).toBeGreaterThanOrEqual(1);
-    expect(touch.count(El.Molten)).toBe(0);
+    expect(touch.get(12, y)).toBe(El.Molten);
+    expect(touch.count(El.Molten) + touch.count(El.Metal)).toBeGreaterThan(0);
 
     const falls = sim();
     const floor = falls.h - 2;
@@ -226,9 +225,8 @@ describe('reactions', () => {
     for (let x = 6; x <= 10; x++) metalFalls.setCell(x, floor, El.Water);
     metalFalls.setCell(8, floor - 5, El.Molten);
     for (let i = 0; i < 20; i++) metalFalls.step();
-    expect(metalFalls.count(El.Molten)).toBe(0);
-    expect(metalFalls.count(El.Metal)).toBeGreaterThan(0);
     expect(metalFalls.count(El.Steam)).toBeGreaterThan(0);
+    expect(metalFalls.count(El.Molten) + metalFalls.count(El.Metal)).toBeGreaterThan(0);
   });
 
   it('lets the brush resolve water painted onto lava or fire', () => {
@@ -295,12 +293,9 @@ describe('reactions', () => {
     const quenched = sim();
     quenched.setCell(5, 8, El.MoltenGlass);
     quenched.paintUser(5, 8, El.Water);
-    expect(quenched.get(5, 8)).toBe(El.Glass);
-    let steam = false;
-    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
-      if (quenched.get(5 + dx, 8 + dy) === El.Steam) steam = true;
-    }
-    expect(steam).toBe(true);
+    expect(quenched.get(5, 8)).toBe(El.Steam);
+    expect(quenched.count(El.GlassShard)).toBeGreaterThan(0);
+    expect(quenched.count(El.Glass)).toBe(0);
   });
 
   it('boils water through a glass dish when fire is outside', () => {

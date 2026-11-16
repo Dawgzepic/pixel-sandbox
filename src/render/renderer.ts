@@ -1,5 +1,6 @@
 import { DEFS, El, GLOW } from '../sim/elements';
 import type { Simulation } from '../sim/simulation';
+import { saltUnits } from '../sim/tuning';
 import type { View } from './camera';
 import { BUBBLE_TEMP, risingBoil, type BoilCell, type RiseMark } from './bubbles';
 
@@ -251,6 +252,18 @@ export class Renderer {
       r = 255;
       g = 170 + heat * 70;
       b = 70 + heat * 80;
+    } else if (t === El.Saltwater) {
+      const shades = [
+        [214, 232, 244],
+        [176, 210, 236],
+        [146, 190, 232],
+        [118, 168, 226],
+      ];
+      const shade = shades[saltUnits(sim.aux[i]) - 1] ?? shades[3];
+      const flick = (sim.variation[i] & 3) * 3;
+      r = shade[0] + flick;
+      g = shade[1] + flick;
+      b = shade[2];
     } else {
       const o = (t * 16 + sim.variation[i]) * 3;
       r = LUT[o];

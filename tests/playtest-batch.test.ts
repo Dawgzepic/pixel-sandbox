@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { El } from '../src/sim/elements';
 import { handDrag, handMix } from '../src/sim/movement';
-import { rustCellAllows, saltwaterDepth } from '../src/sim/reactions';
+import { fullSaltRustSteps } from '../src/sim/reactions';
 import { Simulation } from '../src/sim/simulation';
 import { TUNING } from '../src/sim/tuning';
 import { GROUPS } from '../src/ui/icons';
@@ -38,88 +38,26 @@ describe('hand tool', () => {
 });
 
 describe('root rust', () => {
-  it('pits a wet cell and leaves metal that is out of reach', () => {
+  it('rusts a wet face at its own pace and leaves dry metal alone', () => {
     const world = sim(20, 16, 1);
     const y = world.h - 2;
     world.setCell(1, y, El.Stone);
     world.setCell(2, y, El.Saltwater);
-    world.setCell(13, y, El.Stone);
-    for (let x = 3; x <= 12; x++) world.setCell(x, y, El.Metal);
+    world.setCell(6, y, El.Stone);
+    world.setCell(3, y, El.Metal);
+    world.setCell(4, y, El.Metal);
     world.variation[world.idx(3, y)] = 0;
-    expect(saltwaterDepth(world, 3, y)).toBe(1);
-    expect(saltwaterDepth(world, 8, y)).toBe(0);
-    world.aux2[world.idx(8, y)] = 250;
-    for (let i = 0; i < 20; i++) world.step();
-    expect(world.get(8, y)).toBe(El.Metal);
-
-    const hold = TUNING.rustStride * TUNING.rustTicks;
-    for (let i = 0; i < hold + 4; i++) world.step();
+    world.variation[world.idx(4, y)] = 4;
+    world.setCell(10, y, El.Metal);
+    world.aux2[world.idx(10, y)] = 250;
+    const fast = fullSaltRustSteps(0);
+    for (let i = 0; i < 30; i++) world.step();
+    expect(world.get(3, y)).toBe(El.Metal);
+    expect(world.get(10, y)).toBe(El.Metal);
+    for (let i = 30; i < fast + 4; i++) world.step();
     expect(world.get(3, y)).toBe(El.Rust);
-    expect(world.get(8, y)).toBe(El.Metal);
-  });
-
-  it('decides each pit from the cell, not from its column', () => {
-    expect(rustCellAllows(0, 1, false, false)).toBe(true);
-    expect(rustCellAllows(1, 1, false, false)).toBe(false);
-    expect(rustCellAllows(2, 1, true, false)).toBe(false);
-    expect(rustCellAllows(0, 2, true, false)).toBe(false);
-    expect(rustCellAllows(4, 5, true, false)).toBe(true);
-    expect(rustCellAllows(4, 5, false, true)).toBe(true);
-    expect(rustCellAllows(1, 2, false, true)).toBe(false);
-    expect(rustCellAllows(4, 6, true, false)).toBe(false);
-    expect(rustCellAllows(9, 1, false, false)).toBe(true);
-    expect(rustCellAllows(9, 1, false, false)).toBe(rustCellAllows(9, 1, true, true));
-  });
-
-  it('grows uneven pits and stops a few pixels in', () => {
-    const world = sim(18, 24, 3);
-    const top = 4;
-    const x0 = 2;
-    const width = 13;
-    for (let row = 0; row <= 7; row++) {
-      world.setCell(1, top + row, El.Stone);
-      world.setCell(x0 + width, top + row, El.Stone);
-    }
-    const rolls: number[][] = [
-      [0, 1, 2, 4, 3, 5, 8, 6, 7, 9, 11, 12, 10],
-      [0, 1, 1, 1, 4, 1, 1, 2, 1, 14, 1, 1, 1],
-      [1, 1, 1, 1, 4, 1, 1, 2, 1, 4, 1, 1, 1],
-      [1, 1, 1, 1, 9, 1, 1, 1, 1, 3, 1, 1, 1],
-      [1, 1, 1, 1, 4, 1, 1, 1, 1, 2, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    ];
-    for (let x = 0; x < width; x++) {
-      world.setCell(x0 + x, top, El.Saltwater);
-      for (let row = 0; row < rolls.length; row++) {
-        world.setCell(x0 + x, top + 1 + row, El.Metal);
-        world.variation[world.idx(x0 + x, top + 1 + row)] = rolls[row][x];
-      }
-    }
-    const steps = TUNING.rustStride * TUNING.rustTicks * 5 + 40;
-    for (let i = 0; i < steps; i++) world.step();
-
-    const pitted = (x: number, row: number) => {
-      const t = world.get(x0 + x, top + 1 + row);
-      return t === El.Rust || t === El.RustPowder;
-    };
-    const nucleators = [0, 4, 7, 9, 11];
-    for (const x of nucleators) expect(pitted(x, 0)).toBe(true);
-    for (let x = 0; x < width; x++) {
-      if (!nucleators.includes(x)) expect(pitted(x, 0)).toBe(false);
-    }
-    const gaps: number[] = [];
-    for (let i = 1; i < nucleators.length; i++) gaps.push(nucleators[i] - nucleators[i - 1]);
-    expect(new Set(gaps).size).toBeGreaterThan(1);
-
-    expect(pitted(0, 1)).toBe(false);
-    expect(pitted(4, 1)).toBe(true);
-    expect(pitted(4, 4)).toBe(true);
-    expect(pitted(9, 3)).toBe(true);
-    expect(pitted(9, 4)).toBe(false);
-    expect(pitted(7, 2)).toBe(true);
-    expect(pitted(7, 3)).toBe(false);
-    expect(pitted(1, 1)).toBe(false);
-    for (let x = 0; x < width; x++) expect(world.get(x0 + x, top + 1 + 5)).toBe(El.Metal);
+    expect(world.get(4, y)).toBe(El.Metal);
+    expect(world.get(10, y)).toBe(El.Metal);
   });
 });
 

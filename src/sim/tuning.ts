@@ -23,16 +23,25 @@ export const TUNING = {
   glassLavaStride: 2,
   /** Melt steps of lava contact before glass becomes molten. Fits in a byte. */
   glassLavaTicks: 255,
-  /** Saltwater against metal advances rust once every this many steps. */
-  rustStride: 2,
-  /** Rust steps before metal becomes solid rust. With the stride, a little past the glass melt. */
-  rustTicks: 255,
-  /** Further saltwater contact before solid rust crumbles. Long enough for pitting to creep. */
+  /** Points of moisture before solid rust crumbles. Fits in a byte. */
   crumbleTicks: 255,
-  /** Steps between crumble counts, so roots can reach several pixels before the crust falls off. */
-  crumbleStride: 8,
-  /** How far saltwater pitting may creep into metal, in pixels. */
-  rustDepth: 5,
+  /** Sub-steps before wet rust gains crumble points. A little slower than the rust itself. */
+  crumbleStride: 24,
+  /** Salt units in one solid grain. Three saturated cells boil back into one grain. */
+  saltGrain: 12,
+  /** Salt units one water cell can hold. A grain fills three cells. */
+  saltCap: 4,
+  /** Steps between a salty cell sharing one unit with a fresher neighbor. */
+  saltMixStride: 8,
+  /**
+   * Sub-steps before wet metal gains rust points. A fully salty neighbor
+   * adds saltCap points, so one pixel takes about twenty seconds at 1x.
+   */
+  rustStride: 20,
+  /** Extra sub-steps plain water must wait. It rusts much more slowly than brine. */
+  rustWaterSlow: 4,
+  /** Rust points before wet metal becomes solid rust. Fits in a byte. */
+  rustTicks: 255,
   /**
    * A burning piece loses one tick of life every this many steps.
    * Life itself is woodBurnTicks, so one piece lasts several times longer than a short flame.
@@ -50,12 +59,20 @@ export const TUNING = {
   warmer: 16,
   /** Cooler brush. Freezes water only after the temperature is held down. */
   cooler: 2,
+  /** How far a steam pop throws molten droplets, in cells. */
+  blastRadius: 2,
   lavaInject: 5,
   iceChill: 2,
   explodeRadius: 6,
   maxExplosions: 24,
   maxBodies: 36,
 } as const;
+
+/** Salt units stored on a saltwater cell. Older saves used 0 for a full mix. */
+export function saltUnits(aux: number): number {
+  if (aux <= 0 || aux > TUNING.saltCap) return TUNING.saltCap;
+  return aux;
+}
 
 export const AMBIENT = 20;
 export const GRID_W = 100;

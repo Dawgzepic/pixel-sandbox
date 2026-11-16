@@ -1,6 +1,6 @@
 import { El, HEAT_CONDUCT, PHASE_RULES } from './elements';
 import type { Simulation } from './simulation';
-import { AMBIENT, TUNING } from './tuning';
+import { AMBIENT, saltUnits, TUNING } from './tuning';
 
 const DX = [0, 0, -1, 1];
 const DY = [-1, 1, 0, 0];
@@ -192,7 +192,7 @@ function shareThroughGlass(sim: Simulation): void {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x;
       const t = type[i];
-      if (t !== El.Glass && t !== El.MoltenGlass) continue;
+      if (t !== El.Glass) continue;
       const tp = temp[i];
       for (let k = 0; k < 4; k++) {
         const nx = x + DX[k];
@@ -232,9 +232,40 @@ function chill(sim: Simulation, x: number, y: number): void {
   sim.wake(x, y);
 }
 
-/** Boiling saltwater leaves the salt in place and sends the water off as steam. */
+/** Boiling saltwater returns one salt grain for every three saturated cells. */
 function boilOffSalt(sim: Simulation, x: number, y: number): void {
-  sim.setCell(x, y, El.Salt, { temp: 40, origin: 'system' });
+  const i = sim.idx(x, y);
+  let units = saltUnits(sim.aux[i]) + sim.aux2[i];
+  if (units >= TUNING.saltGrain) {
+    const extra = units - TUNING.saltGrain;
+    sim.setCell(x, y, El.Salt, { temp: 40, aux: TUNING.saltGrain, origin: 'system' });
+    if (extra > 0) parkSaltUnits(sim, x, y, extra);
+    releaseSteam(sim, x, y);
+    return;
+  }
+  if (!parkSaltUnits(sim, x, y, units)) units = 0;
+  sim.setCell(x, y, El.Steam, { temp: 115, aux: 0, origin: 'system' });
+}
+
+function parkSaltUnits(sim: Simulation, x: number, y: number, units: number): boolean {
+  for (let radius = 1; radius <= 3; radius++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+        if (sim.get(nx, ny) !== El.Saltwater) continue;
+        const j = sim.idx(nx, ny);
+        sim.aux2[j] = Math.min(255, sim.aux2[j] + units);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function releaseSteam(sim: Simulation, x: number, y: number): void {
   const spots: Array<[number, number]> = [[0, -1], [0, 1], [-1, 0], [1, 0]];
   for (const [dx, dy] of spots) {
     const nx = x + dx;

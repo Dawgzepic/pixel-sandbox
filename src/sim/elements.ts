@@ -50,11 +50,12 @@ export const El = {
   RustPowder: 36,
   Timber: 37,
   Ash: 38,
+  GlassShard: 39,
 } as const;
 
 export type ElId = (typeof El)[keyof typeof El];
 
-export const ELEMENT_COUNT = 39;
+export const ELEMENT_COUNT = 40;
 
 export type ElementState = 'empty' | 'powder' | 'liquid' | 'gas' | 'solid' | 'fire' | 'foam';
 
@@ -188,7 +189,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Molten, name: 'Molten metal', category: 'liquid',
-    blurb: 'Molten metal. Flows and glows. Water hardens it back into hot metal.',
+    blurb: 'Molten metal. A splash of water flashes to steam and throws hot droplets that cool back into metal.',
     color: [255, 168, 48], variance: 18, state: 'liquid', density: 3.4,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.45, defaultTemp: 1040, alwaysActive: true,
@@ -200,7 +201,7 @@ export const DEFS: ElementDef[] = [
   retired(El.Soap, 'Soap'),
   {
     id: El.Salt, name: 'Salt', formula: 'NaCl', category: 'powder',
-    blurb: 'One grain dissolves into one water pixel. Extra salt sinks and stays solid.',
+    blurb: 'One grain dissolves into three water pixels. Extra salt sinks and stays solid.',
     color: [238, 242, 246], variance: 8, state: 'powder', density: 1.5,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.2, defaultTemp: 20, alwaysActive: false,
@@ -219,7 +220,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.MoltenGlass, name: 'Molten glass', category: 'liquid',
-    blurb: 'Molten glass. Flows and glows. Water hardens it back into hot glass.',
+    blurb: 'Molten glass. A splash of water shatters it into small glass grains.',
     color: [255, 214, 120], variance: 16, state: 'liquid', density: 2.2,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.4, defaultTemp: 1040, alwaysActive: true,
@@ -227,7 +228,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Saltwater, name: 'Saltwater', category: 'liquid',
-    blurb: 'A half-and-half mix. Boiling it leaves the salt behind.',
+    blurb: 'Salty water. It sinks under fresh water, then mixes paler. Boiling three pixels leaves one grain of salt.',
     color: [118, 168, 226], variance: 8, state: 'liquid', density: 1.2,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.4, defaultTemp: 20, alwaysActive: true,
@@ -235,7 +236,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Rust, name: 'Rust', formula: 'Fe2O3', category: 'solid',
-    blurb: 'Iron oxide. Saltwater keeps eating it until it crumbles into powder.',
+    blurb: 'Iron oxide. Wet metal keeps rusting until a container crumbles into powder.',
     color: [176, 84, 36], variance: 14, state: 'solid', density: 8,
     movable: false, solid: true, displaceable: false, flammable: false,
     acidResist: 0, heatConduct: 0.3, defaultTemp: 20, alwaysActive: false,
@@ -263,6 +264,14 @@ export const DEFS: ElementDef[] = [
     color: [186, 184, 176], variance: 10, state: 'powder', density: 0.7,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.12, defaultTemp: 30, alwaysActive: false,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.GlassShard, name: 'Glass shards', formula: 'SiO2', category: 'powder',
+    blurb: 'Broken glass. It falls and piles. Quenching molten glass shatters it into these grains.',
+    color: [214, 232, 238], variance: 14, state: 'powder', density: 1.4,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.2, defaultTemp: 30, alwaysActive: false,
     glow: 0, voidImmune: false, conductive: false,
   },
 ];
@@ -334,11 +343,8 @@ export interface PairRule {
 
 export const PAIR_RULES: PairRule[] = [
   { a: El.Water, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 120, bTemp: 300 },
-  { a: El.Water, b: El.Molten, aTo: El.Steam, bTo: El.Metal, aTemp: 120, bTemp: 480 },
-  { a: El.Water, b: El.MoltenGlass, aTo: El.Steam, bTo: El.Glass, aTemp: 120, bTemp: 420 },
   { a: El.Water, b: El.Fire, aTo: El.Steam, bTo: El.Empty, aTemp: 110, bTemp: 20 },
   { a: El.Ice, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 140, bTemp: 280 },
-  { a: El.Salt, b: El.Water, aTo: El.Saltwater, bTo: El.Saltwater, aTemp: 22, bTemp: 22 },
 ];
 
 const pairMap = new Map<number, PairRule>();

@@ -1,5 +1,6 @@
 import { brushCells } from '../brush';
 import { DENSITY, El, findPair, FLAMMABLE, IS_GAS, IS_LIQUID, IS_POWDER, IS_SOLID, MOVABLE } from './elements';
+import { steamBlast } from './reactions';
 import type { Simulation } from './simulation';
 
 const DX = [0, 0, -1, 1];
@@ -289,12 +290,20 @@ function solidBarrier(sim: Simulation, x: number, y: number): boolean {
   return IS_SOLID[sim.type[sim.idx(x, y)]] === 1;
 }
 
-/** Lava, molten metal, or molten glass meeting water hardens in that step, with steam. */
+/** Lava hardens against water. Molten metal and molten glass pop into steam and droplets. */
 function quench(sim: Simulation, x: number, y: number, nx: number, ny: number): boolean {
   const a = sim.get(x, y);
   const b = sim.get(nx, ny);
+  const wet = (t: number) => t === El.Water || t === El.Saltwater;
+  const melt = (t: number) => t === El.Molten || t === El.MoltenGlass;
+  if ((wet(a) && melt(b)) || (wet(b) && melt(a))) {
+    steamBlast(sim, x, y, nx, ny);
+    sim.visited[sim.idx(x, y)] = 1;
+    sim.visited[sim.idx(nx, ny)] = 1;
+    return true;
+  }
   const water = a === El.Water || b === El.Water;
-  const hot = a === El.Lava || b === El.Lava || a === El.Molten || b === El.Molten || a === El.MoltenGlass || b === El.MoltenGlass;
+  const hot = a === El.Lava || b === El.Lava;
   if (!water || !hot) return false;
   const rule = findPair(a, b);
   if (!rule) return false;
