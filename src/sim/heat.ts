@@ -43,7 +43,7 @@ export function stepHeat(sim: Simulation): void {
             const stillAir = nType === El.Empty && Math.abs(nt - AMBIENT) < 2;
             if (stillAir) {
               // Glass keeps its heat instead of leaking into open air, so a held flame can climb all the way to a melt.
-              if (tp > 70 && t !== El.Glass) {
+              if (tp > 70 && t !== El.Glass && t !== El.BrownGlass) {
                 sum += AMBIENT;
                 n++;
               }
@@ -192,7 +192,7 @@ function shareThroughGlass(sim: Simulation): void {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x;
       const t = type[i];
-      if (t !== El.Glass) continue;
+      if (t !== El.Glass && t !== El.BrownGlass) continue;
       const tp = temp[i];
       for (let k = 0; k < 4; k++) {
         const nx = x + DX[k];
@@ -202,7 +202,7 @@ function shareThroughGlass(sim: Simulation): void {
         const nt = type[j];
         // Open air is not a heat sink. Lava is a heat source of its own: pulling a
         // third of it into the pane would turn the lava to stone in one touch.
-        if (nt === El.Empty || nt === El.Glass || nt === El.MoltenGlass || nt === El.Lava) continue;
+        if (nt === El.Empty || nt === El.Glass || nt === El.BrownGlass || nt === El.MoltenGlass || nt === El.MoltenBrown || nt === El.Lava) continue;
         const diff = tp - temp[j];
         let flow = Math.trunc(diff * 0.35);
         if (flow === 0 && Math.abs(diff) >= 4) flow = diff > 0 ? 1 : -1;
@@ -247,7 +247,33 @@ function boilOffSalt(sim: Simulation, x: number, y: number): void {
   sim.setCell(x, y, El.Steam, { temp: 115, aux: 0, origin: 'system' });
 }
 
+/** Boiling lye returns one ash grain for every three saturated cells. */
+function boilOffLye(sim: Simulation, x: number, y: number): void {
+  const i = sim.idx(x, y);
+  const units = saltUnits(sim.aux[i]) + sim.aux2[i];
+  if (units >= TUNING.saltGrain) {
+    const extra = units - TUNING.saltGrain;
+    sim.setCell(x, y, El.Ash, { temp: 40, aux: TUNING.saltGrain, origin: 'system' });
+    if (extra > 0) parkLyeUnits(sim, x, y, extra);
+    releaseSteam(sim, x, y);
+    return;
+  }
+  if (!parkLyeUnits(sim, x, y, units)) {
+    sim.setCell(x, y, El.Steam, { temp: 115, aux: 0, origin: 'system' });
+    return;
+  }
+  sim.setCell(x, y, El.Steam, { temp: 115, aux: 0, origin: 'system' });
+}
+
 function parkSaltUnits(sim: Simulation, x: number, y: number, units: number): boolean {
+  return parkSolute(sim, x, y, units, El.Saltwater);
+}
+
+function parkLyeUnits(sim: Simulation, x: number, y: number, units: number): boolean {
+  return parkSolute(sim, x, y, units, El.Lye);
+}
+
+function parkSolute(sim: Simulation, x: number, y: number, units: number, liquid: number): boolean {
   for (let radius = 1; radius <= 3; radius++) {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
@@ -255,7 +281,7 @@ function parkSaltUnits(sim: Simulation, x: number, y: number, units: number): bo
         const nx = x + dx;
         const ny = y + dy;
         if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
-        if (sim.get(nx, ny) !== El.Saltwater) continue;
+        if (sim.get(nx, ny) !== liquid) continue;
         const j = sim.idx(nx, ny);
         sim.aux2[j] = Math.min(255, sim.aux2[j] + units);
         return true;
@@ -294,6 +320,10 @@ function phase(sim: Simulation): void {
           const tp = temp[i];
           if (t === El.Saltwater && tp > 100) {
             boilOffSalt(sim, x, y);
+            continue;
+          }
+          if (t === El.Lye && tp > 100) {
+            boilOffLye(sim, x, y);
             continue;
           }
           for (const rule of PHASE_RULES) {

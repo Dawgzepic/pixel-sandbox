@@ -241,12 +241,15 @@ export class Simulation {
     if (!this.inBounds(x, y) || this.isBorder(x, y)) return;
     const t = this.type[this.idx(x, y)];
     if (t === El.Empty) return;
-    const molten = t === El.Lava || t === El.Molten || t === El.MoltenGlass;
+    const molten = t === El.Lava || t === El.Molten || t === El.MoltenGlass || t === El.MoltenSalt || t === El.MoltenBrown;
     this.addHeat(x, y, molten ? -TUNING.coolerMolten : -TUNING.cooler);
   }
 
   private heatGain(x: number, y: number, requested: number): number {
-    return this.type[this.idx(x, y)] === El.Glass ? TUNING.glassHeat : requested;
+    const t = this.type[this.idx(x, y)];
+    if (t === El.Glass || t === El.BrownGlass) return TUNING.glassHeat;
+    if (requested > 0 && (t === El.Salt || t === El.Silica)) return Math.max(1, Math.floor(requested / 8));
+    return requested;
   }
 
   private addHeat(x: number, y: number, delta: number): void {

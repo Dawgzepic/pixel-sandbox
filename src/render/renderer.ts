@@ -252,6 +252,27 @@ export class Renderer {
       r = 255;
       g = 170 + heat * 70;
       b = 70 + heat * 80;
+    } else if (t === El.MoltenSalt) {
+      const flick = (sim.frame + x + y) & 3;
+      r = 255;
+      g = 220 + flick * 8;
+      b = 140 + flick * 6;
+    } else if (t === El.BrownGlass) {
+      const heat = Math.max(0, Math.min(1, (sim.temp[i] - 40) / 500));
+      const pane = ((x + y + sim.variation[i]) & 3) === 0;
+      r = (pane ? 186 : 110) + (40 * heat);
+      g = (pane ? 104 : 62) + (10 * heat);
+      b = (pane ? 52 : 28);
+    } else if (t === El.MoltenBrown) {
+      const flick = (sim.frame + x) & 3;
+      r = 210 + flick * 8;
+      g = 96 + flick * 6;
+      b = 28;
+    } else if (t === El.Lye) {
+      const flick = (sim.variation[i] & 3) * 4;
+      r = 210 + flick;
+      g = 212 + flick;
+      b = 186;
     } else if (t === El.Saltwater) {
       const shades = [
         [214, 232, 244],
@@ -298,7 +319,7 @@ export class Renderer {
             power = heat * 0.55;
           }
         }
-        if (t === El.Metal || t === El.Glass) {
+        if (t === El.Metal || t === El.Glass || t === El.BrownGlass) {
           const heat = Math.max(0, Math.min(1, (sim.temp[i] - 70) / 980));
           if (heat > 0.08) {
             glow = 1;

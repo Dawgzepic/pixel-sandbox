@@ -23,14 +23,26 @@ export function stepReactions(sim: Simulation): void {
           const t = type[i];
           if (t === El.Empty) continue;
           if (HAS_PAIR[t] && tryPair(sim, x, y)) continue;
-          if ((t === El.Molten || t === El.MoltenGlass) && tryQuench(sim, x, y)) continue;
+          if (isMelt(t) && tryQuench(sim, x, y)) continue;
           if (t === El.Salt) {
+            if (meltIceWithSalt(sim, x, y)) continue;
+            warmSalt(sim, x, y);
             dissolveSalt(sim, x, y);
             continue;
           }
+          if (t === El.Ash) {
+            dissolveAsh(sim, x, y);
+            continue;
+          }
+          if (t === El.Silica) {
+            warmSand(sim, x, y);
+            continue;
+          }
+          if (t === El.RustPowder) tintMoltenGlass(sim, x, y);
           if (t === El.Saltwater) diluteSalt(sim, x, y);
           if (RULES_FOR[t].length && tryContact(sim, x, y)) continue;
-          if (t === El.Glass) soakGlass(sim, x, y);
+          if (t === El.Glass) soakGlass(sim, x, y, El.MoltenGlass);
+          else if (t === El.BrownGlass) soakGlass(sim, x, y, El.MoltenBrown);
           else if (t === El.Metal) rustMetal(sim, x, y);
           else if (t === El.Rust) crumbleRust(sim, x, y);
           else if (t === El.Fire) tintSodium(sim, x, y);
@@ -90,11 +102,15 @@ function tryContact(sim: Simulation, x: number, y: number): boolean {
 }
 
 function isWet(t: number): boolean {
-  return t === El.Water || t === El.Saltwater;
+  return t === El.Water || t === El.Saltwater || t === El.Lye;
 }
 
 function isMelt(t: number): boolean {
-  return t === El.Molten || t === El.MoltenGlass;
+  return t === El.Molten || t === El.MoltenGlass || t === El.MoltenSalt || t === El.MoltenBrown;
+}
+
+function hotEnoughToMeltSalt(t: number): boolean {
+  return t === El.Lava || t === El.Molten || t === El.MoltenGlass || t === El.MoltenBrown || t === El.MoltenSalt;
 }
 
 function tryQuench(sim: Simulation, x: number, y: number): boolean {
@@ -154,6 +170,88 @@ export function quenchMolten(sim: Simulation, x: number, y: number, nx = x, ny =
   sim.visited[sim.idx(spot.x, spot.y)] = 1;
 }
 
+/** Salt on ice becomes saltwater and the grain is used up. Nearby cells lose heat. */
+function meltIceWithSalt(sim: Simulation, x: number, y: number): boolean {
+  for (let k = 0; k < 4; k++) {
+    const nx = x + DX[k];
+    const ny = y + DY[k];
+    if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+    if (sim.get(nx, ny) !== El.Ice) continue;
+    sim.setCell(nx, ny, El.Saltwater, { aux: TUNING.saltCap, temp: -8, origin: 'system' });
+    sim.setCell(x, y, El.Empty, { origin: 'system' });
+    for (let n = 0; n < 4; n++) {
+      const cx = nx + DX[n];
+      const cy = ny + DY[n];
+      if (!sim.inBounds(cx, cy) || sim.isBorder(cx, cy)) continue;
+      if (sim.get(cx, cy) === El.Saltwater && cx === nx && cy === ny) continue;
+      sim.setTemp(cx, cy, sim.getTemp(cx, cy) - TUNING.saltIceChill);
+    }
+    sim.reacted[sim.idx(nx, ny)] = 1;
+    return true;
+  }
+  return false;
+}
+
+/** Lava and other melts push salt up to its melting point. Warmer and fire do it more slowly. */
+function warmSalt(sim: Simulation, x: number, y: number): void {
+  if (!neighborHot(sim, x, y, hotEnoughToMeltSalt)) return;
+  sim.setTemp(x, y, sim.getTemp(x, y) + TUNING.saltTouchHeat);
+}
+
+function warmSand(sim: Simulation, x: number, y: number): void {
+  if (!neighborHot(sim, x, y, (t) => t === El.Lava || t === El.Molten || t === El.MoltenGlass || t === El.MoltenBrown)) return;
+  sim.setTemp(x, y, sim.getTemp(x, y) + TUNING.sandTouchHeat);
+}
+
+function neighborHot(sim: Simulation, x: number, y: number, match: (t: number) => boolean): boolean {
+  for (let k = 0; k < 4; k++) {
+    const nx = x + DX[k];
+    const ny = y + DY[k];
+    if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+    if (match(sim.get(nx, ny))) return true;
+  }
+  return false;
+}
+
+/** Rust powder dissolves into molten glass and leaves it brown. */
+function tintMoltenGlass(sim: Simulation, x: number, y: number): void {
+  for (let k = 0; k < 4; k++) {
+    const nx = x + DX[k];
+    const ny = y + DY[k];
+    if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
+    if (sim.get(nx, ny) !== El.MoltenGlass) continue;
+    const temp = sim.getTemp(nx, ny);
+    sim.setCell(nx, ny, El.MoltenBrown, { temp, origin: 'system' });
+    sim.setCell(x, y, El.Empty, { origin: 'system' });
+    sim.reacted[sim.idx(nx, ny)] = 1;
+    return;
+  }
+}
+
+/** One ash grain fills three plain water cells. Saltwater is left alone. */
+function dissolveAsh(sim: Simulation, x: number, y: number): void {
+  const i = sim.idx(x, y);
+  let left = sim.aux[i];
+  if (left <= 0) left = TUNING.saltGrain;
+  const spot = nearestSoluteRoom(sim, x, y, El.Lye);
+  if (!spot) {
+    sim.aux[i] = left;
+    return;
+  }
+  const give = Math.min(left, spot.room);
+  const have = sim.get(spot.x, spot.y) === El.Water ? 0 : saltUnits(sim.aux[sim.idx(spot.x, spot.y)]);
+  const next = Math.min(TUNING.saltCap, have + give);
+  if (sim.get(spot.x, spot.y) === El.Water) {
+    sim.setCell(spot.x, spot.y, El.Lye, { aux: next, temp: 22, origin: 'system' });
+  } else {
+    sim.aux[sim.idx(spot.x, spot.y)] = next;
+    sim.wake(spot.x, spot.y);
+  }
+  left -= give;
+  if (left <= 0) sim.setCell(x, y, El.Empty, { origin: 'system' });
+  else sim.aux[i] = left;
+}
+
 /** One grain is twelve units. It fills the nearest unsaturated water within three cells. */
 function dissolveSalt(sim: Simulation, x: number, y: number): void {
   const i = sim.idx(x, y);
@@ -179,6 +277,15 @@ function dissolveSalt(sim: Simulation, x: number, y: number): void {
 }
 
 function nearestBrineRoom(sim: Simulation, x: number, y: number): { x: number; y: number; room: number } | null {
+  return nearestSoluteRoom(sim, x, y, El.Saltwater);
+}
+
+function nearestSoluteRoom(
+  sim: Simulation,
+  x: number,
+  y: number,
+  solute: number,
+): { x: number; y: number; room: number } | null {
   const seen = new Uint8Array(sim.w * sim.h);
   const queue: Array<[number, number, number]> = [[x, y, 0]];
   seen[sim.idx(x, y)] = 1;
@@ -194,7 +301,7 @@ function nearestBrineRoom(sim: Simulation, x: number, y: number): { x: number; y
       const j = sim.idx(nx, ny);
       if (seen[j]) continue;
       const nt = sim.type[j];
-      if (nt !== El.Water && nt !== El.Saltwater) continue;
+      if (nt !== El.Water && nt !== solute) continue;
       seen[j] = 1;
       const units = nt === El.Water ? 0 : saltUnits(sim.aux[j]);
       const room = TUNING.saltCap - units;
@@ -255,7 +362,7 @@ function neighborIs(sim: Simulation, x: number, y: number, neighbor: number): bo
  * hold a heat experiment. The counter advances every glassLavaStride steps,
  * which is far slower than ice melting in a flame, and it resets if the lava leaves.
  */
-function soakGlass(sim: Simulation, x: number, y: number): void {
+function soakGlass(sim: Simulation, x: number, y: number, product: number): void {
   const i = sim.idx(x, y);
   if (!neighborIs(sim, x, y, El.Lava)) {
     sim.aux[i] = 0;
@@ -271,7 +378,7 @@ function soakGlass(sim: Simulation, x: number, y: number): void {
   const soaked = Math.min(255, sim.aux2[i] + 1);
   sim.aux2[i] = soaked;
   if (soaked >= TUNING.glassLavaTicks) {
-    sim.setCell(x, y, El.MoltenGlass, { temp: 1320, origin: 'system' });
+    sim.setCell(x, y, product, { temp: 1320, origin: 'system' });
   }
 }
 
@@ -451,7 +558,7 @@ function neighborBurningWood(sim: Simulation, x: number, y: number): boolean {
 /** Lit wood keeps burning, spreads slowly, smokes, then becomes ash. Water puts it out. */
 function burnWood(sim: Simulation, x: number, y: number): void {
   const i = sim.idx(x, y);
-  if (neighborIs(sim, x, y, El.Water)) {
+  if (neighborIs(sim, x, y, El.Water) || neighborIs(sim, x, y, El.Lye)) {
     if (sim.aux[i] !== 0 || sim.aux2[i] !== 0) {
       sim.aux[i] = 0;
       sim.aux2[i] = 0;

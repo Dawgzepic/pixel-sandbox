@@ -16,7 +16,7 @@ const LIVE = [
 
 describe('catalog', () => {
   it('keeps stable ids and shows formulas on the chemistry set', () => {
-    expect(DEFS).toHaveLength(40);
+    expect(DEFS).toHaveLength(45);
     for (let i = 0; i < DEFS.length; i++) expect(DEFS[i].id).toBe(i);
     expect(elementLabel(elementByName('Water')!)).toBe('Water (H2O)');
     expect(elementByName('Hydrochloric acid')).toBeUndefined();
@@ -36,7 +36,7 @@ describe('catalog', () => {
     expect(elementLabel(elementByName('Molten metal')!)).toBe('Molten metal');
     expect(elementLabel(elementByName('Molten glass')!)).toBe('Molten glass');
     const shown = GROUPS.flatMap((group) => group.items.map((item) => item.name));
-    for (const gone of ['Sand', 'Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Battery', 'Bulb', 'Hydrogen peroxide', 'Potassium iodide', 'Soap', 'Wall', 'Box', 'Ball', 'Plank', 'Hydrochloric acid', 'Sodium hydroxide', 'Sodium chloride', 'Hydrogen', 'Glass shards']) {
+    for (const gone of ['Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Battery', 'Bulb', 'Hydrogen peroxide', 'Potassium iodide', 'Soap', 'Wall', 'Box', 'Ball', 'Plank', 'Hydrochloric acid', 'Sodium hydroxide', 'Sodium chloride', 'Hydrogen', 'Glass shards']) {
       expect(shown).not.toContain(gone);
     }
     expect(RETIRED[El.Plant]).toBe(1);

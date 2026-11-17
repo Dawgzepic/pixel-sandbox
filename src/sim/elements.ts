@@ -1,3 +1,5 @@
+import { TUNING } from './tuning';
+
 /**
  * Element catalog.
  *
@@ -51,11 +53,16 @@ export const El = {
   Timber: 37,
   Ash: 38,
   GlassShard: 39,
+  MoltenSalt: 40,
+  BrownGlass: 41,
+  MoltenBrown: 42,
+  Silica: 43,
+  Lye: 44,
 } as const;
 
 export type ElId = (typeof El)[keyof typeof El];
 
-export const ELEMENT_COUNT = 40;
+export const ELEMENT_COUNT = 45;
 
 export type ElementState = 'empty' | 'powder' | 'liquid' | 'gas' | 'solid' | 'fire' | 'foam';
 
@@ -267,6 +274,46 @@ export const DEFS: ElementDef[] = [
     glow: 0, voidImmune: false, conductive: false,
   },
   retired(El.GlassShard, 'Glass shards'),
+  {
+    id: El.MoltenSalt, name: 'Molten salt', formula: 'NaCl', category: 'liquid',
+    blurb: 'Melted salt. It glows, freezes back into salt when cooled, and turns water to steam.',
+    color: [255, 236, 170], variance: 16, state: 'liquid', density: 1.55,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.35, defaultTemp: 860, alwaysActive: true,
+    glow: 1, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.BrownGlass, name: 'Brown glass', formula: 'SiO2', category: 'solid',
+    blurb: 'Glass tinted by rust. It holds a liquid, conducts heat, and lava melts it back into brown melt.',
+    color: [148, 84, 42], variance: 12, state: 'solid', density: 8,
+    movable: false, solid: true, displaceable: false, flammable: false,
+    acidResist: 0, heatConduct: 1, defaultTemp: 20, alwaysActive: false,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.MoltenBrown, name: 'Molten brown glass', formula: 'SiO2', category: 'liquid',
+    blurb: 'Rust-tinted molten glass. It cools back into brown glass.',
+    color: [196, 96, 32], variance: 14, state: 'liquid', density: 2.2,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.4, defaultTemp: 1040, alwaysActive: true,
+    glow: 1, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Silica, name: 'Sand', formula: 'SiO2', category: 'powder',
+    blurb: 'Loose silica. It piles, and enough heat melts it into glass.',
+    color: [214, 186, 112], variance: 16, state: 'powder', density: 1.6,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.16, defaultTemp: 20, alwaysActive: false,
+    glow: 0, voidImmune: false, conductive: false,
+  },
+  {
+    id: El.Lye, name: 'Lye water', formula: 'K2CO3', category: 'liquid',
+    blurb: 'Ash dissolved in water. It boils to steam and leaves the ash, and it puts out fire.',
+    color: [206, 208, 186], variance: 8, state: 'liquid', density: 1.05,
+    movable: true, solid: false, displaceable: true, flammable: false,
+    acidResist: 0, heatConduct: 0.4, defaultTemp: 20, alwaysActive: true,
+    glow: 0, voidImmune: false, conductive: false,
+  },
 ];
 
 export const DENSITY = new Float32Array(ELEMENT_COUNT);
@@ -337,6 +384,8 @@ export interface PairRule {
 export const PAIR_RULES: PairRule[] = [
   { a: El.Water, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 120, bTemp: 300 },
   { a: El.Water, b: El.Fire, aTo: El.Steam, bTo: El.Empty, aTemp: 110, bTemp: 20 },
+  { a: El.Lye, b: El.Fire, aTo: El.Steam, bTo: El.Empty, aTemp: 110, bTemp: 20 },
+  { a: El.Lye, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 120, bTemp: 300 },
   { a: El.Ice, b: El.Lava, aTo: El.Steam, bTo: El.Stone, aTemp: 140, bTemp: 280 },
 ];
 
@@ -370,6 +419,10 @@ export const PHASE_RULES: PhaseRule[] = [
   { from: El.Metal, to: El.Molten, op: '>', temp: 1000, setTemp: 1040 },
   { from: El.Molten, to: El.Metal, op: '<', temp: 520, setTemp: 480 },
   { from: El.MoltenGlass, to: El.Glass, op: '<', temp: 520, setTemp: 400 },
+  { from: El.Salt, to: El.MoltenSalt, op: '>', temp: TUNING.saltMelt, setTemp: 860 },
+  { from: El.MoltenSalt, to: El.Salt, op: '<', temp: TUNING.saltFreeze, setTemp: 700 },
+  { from: El.Silica, to: El.MoltenGlass, op: '>', temp: TUNING.sandMelt, setTemp: 1100 },
+  { from: El.MoltenBrown, to: El.BrownGlass, op: '<', temp: 520, setTemp: 400 },
 ];
 
 export function elementByName(name: string): ElementDef | undefined {

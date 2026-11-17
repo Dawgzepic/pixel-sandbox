@@ -10,6 +10,10 @@ export type ToolName =
   | 'Salt'
   | 'Rust powder'
   | 'Ash'
+  | 'Sand'
+  | 'Lye water'
+  | 'Molten salt'
+  | 'Brown glass'
   | 'Glass'
   | 'Rust'
   | 'Wood'
@@ -65,6 +69,13 @@ function drawElement(ctx: CanvasRenderingContext2D, name: string): void {
     ctx.fillRect(8, 5, 4, 3);
     ctx.fillStyle = '#c8c4ce';
     ctx.fillRect(6, 4, 3, 2);
+  } else if (name === 'Brown glass') {
+    ctx.fillStyle = '#8a4e28';
+    ctx.fillRect(4, 4, 8, 8);
+    ctx.fillStyle = '#e7c09a';
+    ctx.fillRect(5, 5, 2, 6);
+    ctx.fillStyle = '#2a140c';
+    ctx.fillRect(8, 6, 1, 4);
   } else if (name === 'Glass') {
     ctx.fillStyle = '#7eb8cc';
     ctx.fillRect(4, 4, 8, 8);
@@ -132,11 +143,11 @@ export interface PaletteItem {
 export const GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
   {
     label: 'Liquids',
-    items: [item('Water'), item('Saltwater')],
+    items: [item('Water'), item('Saltwater'), item('Lye water')],
   },
-  { label: 'Powders', items: [item('Salt'), item('Rust powder'), item('Ash')] },
-  { label: 'Solids', items: [item('Stone'), item('Glass'), item('Metal'), item('Rust'), item('Wood'), item('Ice')] },
-  { label: 'Heat', items: [item('Fire'), item('Lava'), item('Molten metal'), item('Molten glass'), item('Steam')] },
+  { label: 'Powders', items: [item('Salt'), item('Sand'), item('Rust powder'), item('Ash')] },
+  { label: 'Solids', items: [item('Stone'), item('Glass'), item('Brown glass'), item('Metal'), item('Rust'), item('Wood'), item('Ice')] },
+  { label: 'Heat', items: [item('Fire'), item('Lava'), item('Molten metal'), item('Molten glass'), item('Molten salt'), item('Steam')] },
   {
     label: 'Tools',
     items: [

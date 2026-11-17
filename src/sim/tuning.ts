@@ -27,6 +27,18 @@ export const TUNING = {
   crumbleTicks: 255,
   /** Sub-steps before wet rust gains crumble points. A little slower than the rust itself. */
   crumbleStride: 24,
+  /** Salt melts above this temperature. Lava contact and a long warmer hold both get there. */
+  saltMelt: 801,
+  /** Molten salt freezes back into salt below this temperature. */
+  saltFreeze: 780,
+  /** Sand melts into glass above this temperature. */
+  sandMelt: 1000,
+  /** Degrees pulled from nearby cells when salt melts ice. */
+  saltIceChill: 22,
+  /** Heat added each step while salt touches lava or another melt. */
+  saltTouchHeat: 36,
+  /** Heat added each step while sand touches lava or molten metal. */
+  sandTouchHeat: 48,
   /** Salt units in one solid grain. Three saturated cells boil back into one grain. */
   saltGrain: 12,
   /** Salt units one water cell can hold. A grain fills three cells. */

@@ -214,7 +214,7 @@ describe('falling onto a pile', () => {
     }
     expect(ashY).toBe(y - 1);
     expect(world.count(El.Ash)).toBe(1);
-    expect(world.count(El.Water)).toBe(8);
+    expect(world.count(El.Water) + world.count(El.Lye)).toBe(8);
   });
 
   it('lets water sit on ash and on salt instead of drilling through', () => {
@@ -231,10 +231,9 @@ describe('falling onto a pile', () => {
     for (let row = 7; row <= 14; row++) {
       for (let x = 11; x <= 13; x++) ash.setCell(x, y - row, El.Water);
     }
-    const ashCount = ash.count(El.Ash);
     for (let i = 0; i < 24; i++) ash.step();
-    expect(ash.count(El.Ash)).toBe(ashCount);
-    expect(ash.count(El.Water)).toBe(24);
+    expect(ash.count(El.Lye)).toBeGreaterThan(0);
+    expect(ash.count(El.Ash)).toBeGreaterThan(0);
     let highest = y;
     let rows = 0;
     const seen = new Set<number>();
@@ -246,7 +245,7 @@ describe('falling onto a pile', () => {
       }
     }
     rows = seen.size;
-    expect(highest).toBe(y - 5);
+    expect(highest).toBeGreaterThanOrEqual(y - 5);
     expect(rows).toBeGreaterThanOrEqual(4);
     let drilled = 0;
     for (let x = 11; x <= 13; x++) if (ash.get(x, y - 1) === El.Water) drilled++;
@@ -331,16 +330,16 @@ describe('falling onto a pile', () => {
     }
     for (let row = 6; row <= 9; row++) water.setCell(11, y - row, El.Ash);
     for (let i = 0; i < 16; i++) water.step();
-    expect(water.count(El.Ash)).toBe(4);
-    expect(water.count(El.Water)).toBe(11 * 4);
+    expect(water.count(El.Lye)).toBeGreaterThan(0);
+    expect(water.count(El.Water) + water.count(El.Lye)).toBe(11 * 4);
     for (let row = 1; row <= 3; row++) {
       for (let x = 5; x <= 17; x++) expect(water.get(x, y - row)).not.toBe(El.Ash);
     }
-    let resting = false;
-    for (let row = 4; row <= 7; row++) {
-      for (let x = 5; x <= 17; x++) if (water.get(x, y - row) === El.Ash) resting = true;
+    let flung = 0;
+    for (let row = 10; row <= 14; row++) {
+      for (let x = 5; x <= 17; x++) if (water.get(x, y - row) === El.Ash) flung++;
     }
-    expect(resting).toBe(true);
+    expect(flung).toBe(0);
     for (let row = 10; row <= 14; row++) {
       for (let x = 5; x <= 17; x++) expect(water.get(x, y - row)).not.toBe(El.Water);
     }
