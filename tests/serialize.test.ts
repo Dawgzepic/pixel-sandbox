@@ -39,6 +39,17 @@ describe('save bytes', () => {
     expect(copy.count(El.Acid)).toBe(0);
   });
 
+  it('turns saved glass shards into plain glass', () => {
+    const world = new Simulation(12, 12, 4);
+    world.type[world.idx(3, 3)] = El.GlassShard;
+    world.temp[world.idx(3, 3)] = 300;
+    const copy = new Simulation(12, 12, 1);
+    decodeWorld(copy, encodeWorld(world));
+    expect(copy.get(3, 3)).toBe(El.Glass);
+    expect(copy.getTemp(3, 3)).toBe(20);
+    expect(copy.count(El.GlassShard)).toBe(0);
+  });
+
   it('rejects a damaged save and a save for another size', () => {
     const world = new Simulation(18, 16, 2);
     world.setCell(3, 3, El.Stone);

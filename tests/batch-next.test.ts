@@ -8,27 +8,54 @@ function sim(w = 24, h = 28, seed = 4): Simulation {
   return new Simulation(w, h, seed);
 }
 
-describe('steam explosion', () => {
-  it('bursts molten metal into steam and a hot droplet, and leaves distant metal', () => {
+describe('quenching molten', () => {
+  it('turns the touching water into steam and cools only that molten cell', () => {
     const world = sim();
     const y = world.h - 2;
     world.setCell(6, y, El.Molten);
     world.setCell(7, y, El.Molten);
     world.setCell(8, y, El.Water);
-    world.setCell(15, y, El.Stone);
-    world.setCell(17, y, El.Stone);
-    world.setCell(16, y, El.Molten);
+    const near = world.getTemp(7, y);
     world.step();
-    expect(world.count(El.Steam)).toBeGreaterThan(0);
-    expect(world.get(16, y)).toBe(El.Molten);
-    expect(world.count(El.Molten) + world.count(El.Metal)).toBeGreaterThan(0);
+    expect(world.count(El.Steam)).toBe(1);
+    expect(world.get(7, y)).toBe(El.Molten);
+    expect(world.getTemp(7, y)).toBeLessThan(near);
+    expect(world.getTemp(7, y)).toBeGreaterThan(near - TUNING.coolerMolten * 2);
+    expect(world.count(El.Molten)).toBe(2);
+    expect(world.count(El.Metal)).toBe(0);
+    expect(world.impulseX[world.idx(7, y)]).toBe(0);
+    expect(world.impulseY[world.idx(7, y)]).toBe(0);
+
     const glass = sim();
     glass.setCell(6, y, El.MoltenGlass);
     glass.setCell(7, y, El.Saltwater);
+    const before = glass.getTemp(6, y);
     glass.step();
-    expect(glass.count(El.GlassShard)).toBeGreaterThan(0);
+    expect(glass.get(6, y)).toBe(El.MoltenGlass);
+    expect(glass.getTemp(6, y)).toBeLessThan(before);
+    expect(glass.getTemp(6, y)).toBeGreaterThan(before - TUNING.coolerMolten * 2);
     expect(glass.count(El.Glass)).toBe(0);
-    expect(glass.count(El.Steam)).toBeGreaterThan(0);
+    expect(glass.count(El.Steam)).toBe(1);
+  });
+
+  it('hardens the contact after several cools, the way the cooler does', () => {
+    const world = sim();
+    const y = world.h - 2;
+    world.setCell(5, y, El.Stone);
+    world.setCell(7, y, El.Stone);
+    world.setCell(6, y, El.Molten);
+    world.setTemp(6, y, 600);
+    world.setCell(6, y - 1, El.Water);
+    world.step();
+    expect(world.get(6, y)).toBe(El.Metal);
+    expect(world.count(El.Steam)).toBeGreaterThan(0);
+
+    const glass = sim();
+    glass.setCell(6, y, El.MoltenGlass);
+    glass.setTemp(6, y, 600);
+    glass.setCell(6, y - 1, El.Water);
+    glass.step();
+    expect(glass.get(6, y)).toBe(El.Glass);
   });
 
   it('still turns lava and water into stone and steam', () => {

@@ -189,7 +189,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.Molten, name: 'Molten metal', category: 'liquid',
-    blurb: 'Molten metal. A splash of water flashes to steam and throws hot droplets that cool back into metal.',
+    blurb: 'Molten metal. Water flashes to steam and cools the contact until it hardens.',
     color: [255, 168, 48], variance: 18, state: 'liquid', density: 3.4,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.45, defaultTemp: 1040, alwaysActive: true,
@@ -220,7 +220,7 @@ export const DEFS: ElementDef[] = [
   },
   {
     id: El.MoltenGlass, name: 'Molten glass', category: 'liquid',
-    blurb: 'Molten glass. A splash of water shatters it into small glass grains.',
+    blurb: 'Molten glass. Water flashes to steam and cools the contact until it hardens.',
     color: [255, 214, 120], variance: 16, state: 'liquid', density: 2.2,
     movable: true, solid: false, displaceable: true, flammable: false,
     acidResist: 0, heatConduct: 0.4, defaultTemp: 1040, alwaysActive: true,
@@ -266,14 +266,7 @@ export const DEFS: ElementDef[] = [
     acidResist: 0, heatConduct: 0.12, defaultTemp: 30, alwaysActive: false,
     glow: 0, voidImmune: false, conductive: false,
   },
-  {
-    id: El.GlassShard, name: 'Glass shards', formula: 'SiO2', category: 'powder',
-    blurb: 'Broken glass. It falls and piles. Quenching molten glass shatters it into these grains.',
-    color: [214, 232, 238], variance: 14, state: 'powder', density: 1.4,
-    movable: true, solid: false, displaceable: true, flammable: false,
-    acidResist: 0, heatConduct: 0.2, defaultTemp: 30, alwaysActive: false,
-    glow: 0, voidImmune: false, conductive: false,
-  },
+  retired(El.GlassShard, 'Glass shards'),
 ];
 
 export const DENSITY = new Float32Array(ELEMENT_COUNT);

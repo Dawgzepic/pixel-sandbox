@@ -59,8 +59,6 @@ export const TUNING = {
   warmer: 16,
   /** Cooler brush. Freezes water only after the temperature is held down. */
   cooler: 2,
-  /** How far a steam pop throws molten droplets, in cells. */
-  blastRadius: 2,
   lavaInject: 5,
   iceChill: 2,
   explodeRadius: 6,

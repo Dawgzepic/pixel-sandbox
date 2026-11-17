@@ -23,7 +23,7 @@ export function stepReactions(sim: Simulation): void {
           const t = type[i];
           if (t === El.Empty) continue;
           if (HAS_PAIR[t] && tryPair(sim, x, y)) continue;
-          if ((t === El.Molten || t === El.MoltenGlass) && tryBlast(sim, x, y)) continue;
+          if ((t === El.Molten || t === El.MoltenGlass) && tryQuench(sim, x, y)) continue;
           if (t === El.Salt) {
             dissolveSalt(sim, x, y);
             continue;
@@ -89,8 +89,6 @@ function tryContact(sim: Simulation, x: number, y: number): boolean {
   return false;
 }
 
-const BLAST_CAP = 5;
-
 function isWet(t: number): boolean {
   return t === El.Water || t === El.Saltwater;
 }
@@ -99,101 +97,61 @@ function isMelt(t: number): boolean {
   return t === El.Molten || t === El.MoltenGlass;
 }
 
-function tryBlast(sim: Simulation, x: number, y: number): boolean {
+function tryQuench(sim: Simulation, x: number, y: number): boolean {
   for (let k = 0; k < 4; k++) {
     const nx = x + DX[k];
     const ny = y + DY[k];
     if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
     if (!isWet(sim.get(nx, ny))) continue;
-    steamBlast(sim, x, y, nx, ny);
+    quenchMolten(sim, x, y, nx, ny);
     return true;
   }
   return false;
 }
 
 /**
- * Water or saltwater on molten metal or molten glass. The liquid becomes a
- * small steam burst. Nearby molten metal is thrown as hot droplets that cool
- * back into metal. Molten glass shatters into loose grains. Lava is not handled here.
+ * Water or saltwater flashes into one steam cell. The molten cell it touches
+ * cools by the same amount as the Cooler, in place, until it solidifies.
+ * Nothing is thrown. Lava is left to its own stone-and-steam rule.
  */
-export function steamBlast(sim: Simulation, x: number, y: number, nx = x, ny = y): void {
+export function quenchMolten(sim: Simulation, x: number, y: number, nx = x, ny = y): void {
   const same = nx === x && ny === y;
   const spots: Array<[number, number]> = same ? [[x, y]] : [[x, y], [nx, ny]];
-  let wx = x;
-  let wy = y;
-  let painted: number | null = null;
-  const melts: Array<[number, number]> = [];
+  let mx = -1;
+  let my = -1;
+  let wx = -1;
+  let wy = -1;
   for (const [cx, cy] of spots) {
     const t = sim.get(cx, cy);
     if (isWet(t)) {
       wx = cx;
       wy = cy;
     }
-    if (isMelt(t)) melts.push([cx, cy]);
-  }
-  if (same && melts.length === 1 && !isWet(sim.get(x, y))) {
-    painted = sim.get(x, y);
-    wx = x;
-    wy = y;
-    melts.length = 0;
-  }
-  sim.setCell(wx, wy, El.Steam, { temp: 140, origin: 'system' });
-  sim.reacted[sim.idx(wx, wy)] = 1;
-  sim.visited[sim.idx(wx, wy)] = 1;
-  if (painted !== null) {
-    const spot = sim.findEmptyNeighbor(wx, wy);
-    if (spot) throwDroplet(sim, spot.x, spot.y, painted, wx, wy);
-  }
-  puffSteam(sim, wx, wy, 2);
-  if (painted !== null) return;
-  let thrown = 0;
-  const r = TUNING.blastRadius;
-  for (let dy = -r; dy <= r && thrown < BLAST_CAP; dy++) {
-    for (let dx = -r; dx <= r && thrown < BLAST_CAP; dx++) {
-      const cx = wx + dx;
-      const cy = wy + dy;
-      if (!sim.inBounds(cx, cy) || sim.isBorder(cx, cy)) continue;
-      const t = sim.get(cx, cy);
-      if (!isMelt(t)) continue;
-      throwDroplet(sim, cx, cy, t, wx, wy);
-      thrown++;
+    if (isMelt(t)) {
+      mx = cx;
+      my = cy;
     }
   }
-}
-
-function throwDroplet(sim: Simulation, x: number, y: number, hot: number, ox: number, oy: number): void {
-  if (hot === El.MoltenGlass) sim.setCell(x, y, El.GlassShard, { temp: 280, origin: 'system' });
-  else if (sim.get(x, y) !== El.Molten) sim.setCell(x, y, El.Molten, { temp: 980, origin: 'system' });
-  else sim.setTemp(x, y, Math.max(sim.getTemp(x, y), 980));
-  let ix = Math.sign(x - ox);
-  let iy = Math.sign(y - oy);
-  if (ix === 0 && iy === 0) {
-    ix = sim.rng.int(3) - 1;
-    iy = sim.rng.int(3) - 1;
-    if (ix === 0 && iy === 0) iy = -1;
-  } else if (sim.rng.next() < 0.5) {
-    if (sim.rng.next() < 0.5) ix += sim.rng.int(3) - 1;
-    else iy += sim.rng.int(3) - 1;
+  if (same && mx < 0 && isMelt(sim.get(x, y))) {
+    mx = x;
+    my = y;
   }
-  sim.addImpulse(x, y, ix * 2 || ix, iy * 2 || iy);
-  sim.reacted[sim.idx(x, y)] = 1;
-  sim.visited[sim.idx(x, y)] = 1;
-}
-
-function puffSteam(sim: Simulation, x: number, y: number, cap: number): void {
-  let puffs = 0;
-  for (let dy = -1; dy <= 1 && puffs < cap; dy++) {
-    for (let dx = -1; dx <= 1 && puffs < cap; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      if (sim.rng.next() > 0.65) continue;
-      const nx = x + dx;
-      const ny = y + dy;
-      if (!sim.inBounds(nx, ny) || sim.isBorder(nx, ny)) continue;
-      if (sim.get(nx, ny) !== El.Empty) continue;
-      sim.setCell(nx, ny, El.Steam, { temp: 120, origin: 'system' });
-      puffs++;
-    }
+  if (mx >= 0) {
+    sim.setTemp(mx, my, sim.getTemp(mx, my) - TUNING.coolerMolten);
+    sim.reacted[sim.idx(mx, my)] = 1;
+    sim.visited[sim.idx(mx, my)] = 1;
   }
+  if (wx >= 0) {
+    sim.setCell(wx, wy, El.Steam, { temp: 140, origin: 'system' });
+    sim.reacted[sim.idx(wx, wy)] = 1;
+    sim.visited[sim.idx(wx, wy)] = 1;
+    return;
+  }
+  if (mx < 0) return;
+  const spot = sim.findEmptyNeighbor(mx, my);
+  if (!spot) return;
+  sim.setCell(spot.x, spot.y, El.Steam, { temp: 140, origin: 'system' });
+  sim.visited[sim.idx(spot.x, spot.y)] = 1;
 }
 
 /** One grain is twelve units. It fills the nearest unsaturated water within three cells. */

@@ -11,7 +11,7 @@ import { Rng } from './rng';
 import { stepElectricity } from './electricity';
 import { stepHeat } from './heat';
 import { stepMovement } from './movement';
-import { steamBlast, stepReactions } from './reactions';
+import { quenchMolten, stepReactions } from './reactions';
 import { BUBBLE_TEMP, STEAM_TRAIL } from '../render/bubbles';
 import { AMBIENT, CHUNK, TUNING } from './tuning';
 
@@ -189,12 +189,15 @@ export class Simulation {
     }
     if ((el === El.Water || el === El.Saltwater) && (prev === El.Molten || prev === El.MoltenGlass)) {
       this.userPaint[el]++;
-      steamBlast(this, x, y);
+      quenchMolten(this, x, y);
       return;
     }
     if ((el === El.Molten || el === El.MoltenGlass) && (prev === El.Water || prev === El.Saltwater)) {
       this.userPaint[el]++;
-      steamBlast(this, x, y);
+      const cooled = DEFAULT_TEMP[el] - TUNING.coolerMolten;
+      this.setCell(x, y, el, { temp: cooled, origin: 'user' });
+      const spot = this.findEmptyNeighbor(x, y);
+      if (spot) this.setCell(spot.x, spot.y, El.Steam, { temp: 140, origin: 'system' });
       return;
     }
     if (el !== El.Empty && prev !== El.Empty && prev !== el) {

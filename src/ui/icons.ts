@@ -10,7 +10,6 @@ export type ToolName =
   | 'Salt'
   | 'Rust powder'
   | 'Ash'
-  | 'Glass shards'
   | 'Glass'
   | 'Rust'
   | 'Wood'
@@ -135,7 +134,7 @@ export const GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
     label: 'Liquids',
     items: [item('Water'), item('Saltwater')],
   },
-  { label: 'Powders', items: [item('Salt'), item('Rust powder'), item('Ash'), item('Glass shards')] },
+  { label: 'Powders', items: [item('Salt'), item('Rust powder'), item('Ash')] },
   { label: 'Solids', items: [item('Stone'), item('Glass'), item('Metal'), item('Rust'), item('Wood'), item('Ice')] },
   { label: 'Heat', items: [item('Fire'), item('Lava'), item('Molten metal'), item('Molten glass'), item('Steam')] },
   {

@@ -27,7 +27,7 @@ describe('catalog', () => {
     expect(elementLabel(elementByName('Rust')!)).toBe('Rust (Fe2O3)');
     expect(elementByName('Hydrogen')).toBeUndefined();
     expect(elementLabel(elementByName('Glass')!)).toBe('Glass (SiO2)');
-    expect(elementLabel(elementByName('Glass shards')!)).toBe('Glass shards (SiO2)');
+    expect(elementByName('Glass shards')).toBeUndefined();
     expect(elementLabel(elementByName('Ice')!)).toBe('Ice (H2O)');
     expect(elementLabel(elementByName('Steam')!)).toBe('Steam (H2O)');
     expect(elementLabel(elementByName('Stone')!)).toBe('Stone');
@@ -36,7 +36,7 @@ describe('catalog', () => {
     expect(elementLabel(elementByName('Molten metal')!)).toBe('Molten metal');
     expect(elementLabel(elementByName('Molten glass')!)).toBe('Molten glass');
     const shown = GROUPS.flatMap((group) => group.items.map((item) => item.name));
-    for (const gone of ['Sand', 'Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Battery', 'Bulb', 'Hydrogen peroxide', 'Potassium iodide', 'Soap', 'Wall', 'Box', 'Ball', 'Plank', 'Hydrochloric acid', 'Sodium hydroxide', 'Sodium chloride', 'Hydrogen']) {
+    for (const gone of ['Sand', 'Seed', 'Plant', 'Bug', 'Void', 'Clone', 'Portal', 'Oil', 'Gunpowder', 'Battery', 'Bulb', 'Hydrogen peroxide', 'Potassium iodide', 'Soap', 'Wall', 'Box', 'Ball', 'Plank', 'Hydrochloric acid', 'Sodium hydroxide', 'Sodium chloride', 'Hydrogen', 'Glass shards']) {
       expect(shown).not.toContain(gone);
     }
     expect(RETIRED[El.Plant]).toBe(1);
@@ -196,9 +196,12 @@ describe('reactions', () => {
   it('hardens molten metal in water and turns flowing lava into stone', () => {
     const poured = sim();
     poured.setCell(5, 5, El.Molten);
+    const hot = poured.getTemp(5, 5);
     poured.paintUser(5, 5, El.Water);
-    expect(poured.get(5, 5)).toBe(El.Steam);
-    expect(poured.count(El.Molten) + poured.count(El.Metal)).toBeGreaterThan(0);
+    expect(poured.get(5, 5)).toBe(El.Molten);
+    expect(poured.getTemp(5, 5)).toBe(hot - TUNING.coolerMolten);
+    expect(poured.count(El.Steam)).toBeGreaterThan(0);
+    expect(poured.impulseX[poured.idx(5, 5)]).toBe(0);
 
     const touch = sim();
     const y = touch.h - 2;
@@ -292,10 +295,12 @@ describe('reactions', () => {
 
     const quenched = sim();
     quenched.setCell(5, 8, El.MoltenGlass);
+    const glassHot = quenched.getTemp(5, 8);
     quenched.paintUser(5, 8, El.Water);
-    expect(quenched.get(5, 8)).toBe(El.Steam);
-    expect(quenched.count(El.GlassShard)).toBeGreaterThan(0);
+    expect(quenched.get(5, 8)).toBe(El.MoltenGlass);
+    expect(quenched.getTemp(5, 8)).toBe(glassHot - TUNING.coolerMolten);
     expect(quenched.count(El.Glass)).toBe(0);
+    expect(quenched.count(El.Steam)).toBeGreaterThan(0);
   });
 
   it('boils water through a glass dish when fire is outside', () => {

@@ -80,6 +80,14 @@ export function decodeWorld(sim: Simulation, data: Uint8Array | ArrayBuffer): vo
   o += n;
   for (let i = 0; i < n; i++) {
     const t = sim.type[i];
+    if (t === El.GlassShard) {
+      sim.type[i] = El.Glass;
+      sim.temp[i] = AMBIENT;
+      sim.aux[i] = 0;
+      sim.aux2[i] = 0;
+      sim.variation[i] = 0;
+      continue;
+    }
     if (t >= RETIRED.length || RETIRED[t]) {
       sim.type[i] = El.Empty;
       sim.temp[i] = AMBIENT;
