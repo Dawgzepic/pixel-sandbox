@@ -26,12 +26,12 @@ test('phone screen shows the sandbox, picker, and temperature', async ({ page })
   await page.getByRole('button', { name: 'ALL', exact: true }).click();
   await expect(page.locator('.sheettitle')).toHaveText('ELEMENTS');
   await expect(page.locator('.sheet').getByRole('button', { name: 'Water (H2O)' })).toBeVisible();
-  await expect(page.locator('.sheet').getByRole('button', { name: 'Salt (NaCl)' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Salt (NaCl)', exact: true })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Saltwater' })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Hydrochloric acid (HCl)' })).toHaveCount(0);
   await expect(page.locator('.sheet').getByRole('button', { name: 'Sodium hydroxide (NaOH)' })).toHaveCount(0);
   await expect(page.getByText('Sodium chloride')).toHaveCount(0);
-  await expect(page.locator('.sheet').getByRole('button', { name: 'Glass (SiO2)' })).toBeVisible();
+  await expect(page.locator('.sheet').getByRole('button', { name: 'Glass (SiO2)', exact: true })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Warmer' })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Cooler' })).toBeVisible();
   await expect(page.locator('.sheet').getByRole('button', { name: 'Lava' })).toBeVisible();
